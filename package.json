@@ -1,0 +1,18 @@
+{
+  "name": "uk-true-hourly-wage",
+  "version": "1.0.0",
+  "description": "UK True Hourly Wage Calculator - Calculate your real hourly wage after UK taxes, commute time, and unpaid work hours",
+  "scripts": {
+    "dev": "npx serve .",
+    "start": "npx serve ."
+  },
+  "keywords": [
+    "uk",
+    "tax",
+    "calculator",
+    "hourly-wage",
+    "personal-finance"
+  ],
+  "author": "",
+  "license": "MIT"
+}
