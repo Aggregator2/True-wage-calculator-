@@ -1,7 +1,49 @@
 /**
  * UK True Hourly Wage Calculator
  * Tax rates: 2025/26
+ *
+ * Features:
+ * - Full UK tax calculations (Income Tax, NI, Student Loans)
+ * - Time cost analysis (commute, breaks, prep)
+ * - Social media sharing cards (1200x630px)
+ * - PDF report generation (1 free, then premium)
+ * - S&P 500 opportunity cost calculator
+ * - FIRE progress visualization
+ * - What-If scenario comparisons
  */
+
+// ============================================
+// PDF DOWNLOAD TRACKING
+// ============================================
+
+const PDF_STORAGE_KEY = 'truewage_pdf_downloads';
+const FREE_PDF_LIMIT = 1;
+
+function getPdfDownloadCount() {
+    return parseInt(localStorage.getItem(PDF_STORAGE_KEY) || '0', 10);
+}
+
+function incrementPdfDownload() {
+    const count = getPdfDownloadCount() + 1;
+    localStorage.setItem(PDF_STORAGE_KEY, count.toString());
+    return count;
+}
+
+function canDownloadFreePdf() {
+    return getPdfDownloadCount() < FREE_PDF_LIMIT;
+}
+
+// ============================================
+// EMAIL SIGNUP STORAGE
+// ============================================
+
+const EMAIL_STORAGE_KEY = 'truewage_email_signups';
+
+function storeEmailSignup(email) {
+    const signups = JSON.parse(localStorage.getItem(EMAIL_STORAGE_KEY) || '[]');
+    signups.push({ email, timestamp: new Date().toISOString() });
+    localStorage.setItem(EMAIL_STORAGE_KEY, JSON.stringify(signups));
+}
 
 // ============================================
 // UK TAX RATES 2025/26
@@ -352,6 +394,18 @@ function calculate() {
     document.getElementById('results').classList.remove('hidden');
     document.getElementById('shareSection').style.display = 'block';
 
+    // Update FIRE progress with calculated net income
+    renderFireProgress();
+
+    // Render What-If scenarios
+    renderWhatIfScenarios();
+
+    // Initialize S&P calculator
+    calculateOpportunityCost();
+
+    // Update PDF button state
+    updatePdfButton();
+
     // Smooth scroll to results
     setTimeout(() => {
         document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -666,22 +720,14 @@ function formatHours(hours) {
 // ============================================
 
 function updateShareUrl() {
-    const params = new URLSearchParams({
-        s: getSalaryValue(),
-        r: document.getElementById('taxRegion').value,
-        sl: document.getElementById('studentLoan').value,
-        p: document.getElementById('pensionPercent').value,
-        ch: document.getElementById('contractHours').value,
-        cm: document.getElementById('commuteMinutes').value,
-        ub: document.getElementById('unpaidBreak').value,
-        pt: document.getElementById('prepTime').value,
-        wd: document.getElementById('workDays').value,
-        hd: document.getElementById('holidayDays').value,
-        cc: document.getElementById('commuteCost').value,
-        wc: document.getElementById('workClothes').value,
-        st: document.getElementById('stressTax').value
-    });
-    document.getElementById('shareUrl').value = `${window.location.origin}${window.location.pathname}?${params}`;
+    // Use the compact Base64 encoded format for cleaner URLs
+    const shareUrl = generateCompactShareUrl();
+    document.getElementById('shareUrl').value = shareUrl;
+
+    // Also update browser URL without reload
+    if (window.history && window.history.replaceState) {
+        window.history.replaceState({}, '', shareUrl);
+    }
 }
 
 function copyShareUrl() {
@@ -795,11 +841,711 @@ function formatTimeHM(hours) {
 }
 
 // ============================================
+// SHAREABLE URL - BASE64 ENCODING
+// ============================================
+
+function generateCompactShareUrl() {
+    const data = {
+        s: getSalaryValue(),
+        r: document.getElementById('taxRegion').value,
+        sl: document.getElementById('studentLoan').value,
+        p: document.getElementById('pensionPercent').value,
+        ch: document.getElementById('contractHours').value,
+        cm: document.getElementById('commuteMinutes').value,
+        ub: document.getElementById('unpaidBreak').value,
+        pt: document.getElementById('prepTime').value,
+        wd: document.getElementById('workDays').value,
+        hd: document.getElementById('holidayDays').value,
+        cc: document.getElementById('commuteCost').value,
+        wc: document.getElementById('workClothes').value,
+        st: document.getElementById('stressTax').value
+    };
+    const encoded = btoa(JSON.stringify(data));
+    return `${window.location.origin}${window.location.pathname}?calc=${encoded}`;
+}
+
+function loadFromCompactUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const encoded = params.get('calc');
+    if (!encoded) return false;
+
+    try {
+        const data = JSON.parse(atob(encoded));
+        document.getElementById('salary').value = formatNumber(parseInt(data.s) || 35000);
+        document.getElementById('taxRegion').value = data.r || 'england';
+        document.getElementById('studentLoan').value = data.sl || 'none';
+        document.getElementById('pensionPercent').value = data.p || '5';
+        document.getElementById('contractHours').value = data.ch || '37.5';
+        document.getElementById('commuteMinutes').value = data.cm || '56';
+        document.getElementById('unpaidBreak').value = data.ub || '30';
+        document.getElementById('prepTime').value = data.pt || '30';
+        document.getElementById('workDays').value = data.wd || '5';
+        document.getElementById('holidayDays').value = data.hd || '28';
+        document.getElementById('commuteCost').value = data.cc || '0';
+        document.getElementById('workClothes').value = data.wc || '0';
+        document.getElementById('stressTax').value = data.st || '0';
+        document.getElementById('stressTaxValue').textContent = (data.st || '0') + '%';
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+// ============================================
+// SOCIAL MEDIA RESULT CARDS (1200x630px)
+// ============================================
+
+async function generateSocialCard() {
+    if (!lastCalculation) {
+        alert('Please calculate your wage first');
+        return null;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 1200;
+    canvas.height = 630;
+    const ctx = canvas.getContext('2d');
+
+    // Background gradient
+    const gradient = ctx.createLinearGradient(0, 0, 1200, 630);
+    gradient.addColorStop(0, '#050505');
+    gradient.addColorStop(0.5, '#0a0a0a');
+    gradient.addColorStop(1, '#050505');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 1200, 630);
+
+    // Accent glow effect
+    const glowGradient = ctx.createRadialGradient(600, 300, 0, 600, 300, 400);
+    glowGradient.addColorStop(0, 'rgba(16, 185, 129, 0.15)');
+    glowGradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = glowGradient;
+    ctx.fillRect(0, 0, 1200, 630);
+
+    // Grid pattern
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < 1200; x += 60) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, 630);
+        ctx.stroke();
+    }
+    for (let y = 0; y < 630; y += 60) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(1200, y);
+        ctx.stroke();
+    }
+
+    // Title
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 28px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('My True Hourly Wage', 600, 80);
+
+    // Main stat card background
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.1)';
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.3)';
+    ctx.lineWidth = 2;
+    roundRect(ctx, 350, 120, 500, 180, 20);
+    ctx.fill();
+    ctx.stroke();
+
+    // True rate
+    ctx.fillStyle = '#10b981';
+    ctx.font = 'bold 72px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(formatCurrency(lastCalculation.trueHourlyRate), 600, 220);
+
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.7)';
+    ctx.font = '18px Inter, sans-serif';
+    ctx.fillText('per hour (after tax & real time)', 600, 270);
+
+    // Comparison stats
+    const stats = [
+        { label: 'Assumed Rate', value: formatCurrency(lastCalculation.assumedHourlyRate), color: '#a3a3a3' },
+        { label: 'Reality Check', value: ((lastCalculation.trueHourlyRate / lastCalculation.assumedHourlyRate) * 100).toFixed(0) + '%', color: getPercentColor((lastCalculation.trueHourlyRate / lastCalculation.assumedHourlyRate) * 100) },
+        { label: 'Hidden Hours', value: formatTimeHM(lastCalculation.timeBreakdown.weeklyTotalHours - lastCalculation.timeBreakdown.weeklyContractHours) + '/week', color: '#f97316' }
+    ];
+
+    let xPos = 200;
+    stats.forEach(stat => {
+        ctx.fillStyle = 'rgba(26, 26, 26, 0.8)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 1;
+        roundRect(ctx, xPos - 120, 340, 240, 120, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#525252';
+        ctx.font = '14px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(stat.label.toUpperCase(), xPos, 380);
+
+        ctx.fillStyle = stat.color;
+        ctx.font = 'bold 32px Inter, sans-serif';
+        ctx.fillText(stat.value, xPos, 430);
+
+        xPos += 400;
+    });
+
+    // Tax info bar
+    ctx.fillStyle = 'rgba(17, 17, 17, 0.9)';
+    roundRect(ctx, 100, 500, 1000, 60, 12);
+    ctx.fill();
+
+    ctx.fillStyle = '#737373';
+    ctx.font = '14px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    const taxInfo = `£${formatNumber(Math.round(lastCalculation.salary))} salary · ${lastCalculation.region === 'scotland' ? 'Scotland' : 'England/Wales/NI'} · ${lastCalculation.taxBreakdown.effectiveTaxRate.toFixed(1)}% effective tax`;
+    ctx.fillText(taxInfo, 600, 538);
+
+    // Branding
+    ctx.fillStyle = '#10b981';
+    ctx.font = 'bold 16px Inter, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('TrueWage', 60, 600);
+
+    ctx.fillStyle = '#525252';
+    ctx.font = '14px Inter, sans-serif';
+    ctx.fillText('truewage.co.uk', 150, 600);
+
+    return canvas;
+}
+
+function roundRect(ctx, x, y, width, height, radius) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+}
+
+function getPercentColor(percent) {
+    if (percent < 50) return '#ef4444';
+    if (percent < 70) return '#f59e0b';
+    return '#10b981';
+}
+
+async function downloadSocialCard() {
+    const canvas = await generateSocialCard();
+    if (!canvas) return;
+
+    const link = document.createElement('a');
+    link.download = 'my-true-hourly-wage.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+}
+
+async function shareToTwitter() {
+    if (!lastCalculation) return;
+    const percent = ((lastCalculation.trueHourlyRate / lastCalculation.assumedHourlyRate) * 100).toFixed(0);
+    const text = `My true hourly wage is ${formatCurrency(lastCalculation.trueHourlyRate)}/hour - only ${percent}% of what I assumed! 😱\n\nCalculate yours:`;
+    const url = generateCompactShareUrl();
+    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
+}
+
+async function shareToLinkedIn() {
+    const url = generateCompactShareUrl();
+    window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, '_blank');
+}
+
+// ============================================
+// PDF REPORT GENERATION
+// ============================================
+
+async function generatePdfReport() {
+    if (!lastCalculation) {
+        alert('Please calculate your wage first');
+        return;
+    }
+
+    const canDownload = canDownloadFreePdf();
+
+    if (!canDownload) {
+        showPremiumModal();
+        return;
+    }
+
+    // Load jsPDF dynamically if not already loaded
+    if (typeof jspdf === 'undefined') {
+        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    // Header
+    doc.setFillColor(5, 5, 5);
+    doc.rect(0, 0, 210, 40, 'F');
+    doc.setTextColor(16, 185, 129);
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TrueWage Report', 20, 25);
+    doc.setTextColor(115, 115, 115);
+    doc.setFontSize(10);
+    doc.text('Generated: ' + new Date().toLocaleDateString('en-GB'), 150, 25);
+
+    // Main result
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Your True Hourly Wage', 20, 55);
+
+    doc.setFontSize(36);
+    doc.setTextColor(16, 185, 129);
+    doc.text(formatCurrency(lastCalculation.trueHourlyRate), 20, 75);
+
+    doc.setFontSize(12);
+    doc.setTextColor(100, 100, 100);
+    doc.text('per hour after tax and real time', 20, 85);
+
+    // Comparison
+    const percent = ((lastCalculation.trueHourlyRate / lastCalculation.assumedHourlyRate) * 100).toFixed(1);
+    doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Assumed Rate: ${formatCurrency(lastCalculation.assumedHourlyRate)}/hour`, 20, 100);
+    doc.text(`Reality Check: ${percent}% of what you thought`, 20, 108);
+
+    // Tax Breakdown
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Tax Breakdown (Annual)', 20, 125);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    let y = 135;
+    const tax = lastCalculation.taxBreakdown;
+
+    const taxItems = [
+        ['Gross Salary', `£${formatNumber(Math.round(tax.grossSalary))}`],
+        ['Income Tax', `-£${formatNumber(Math.round(tax.incomeTax))}`],
+        ['National Insurance', `-£${formatNumber(Math.round(tax.nationalInsurance))}`],
+    ];
+
+    if (tax.studentLoan > 0) taxItems.push(['Student Loan', `-£${formatNumber(Math.round(tax.studentLoan))}`]);
+    if (tax.pensionContribution > 0) taxItems.push(['Pension', `-£${formatNumber(Math.round(tax.pensionContribution))}`]);
+    if (lastCalculation.annualWorkCosts > 0) taxItems.push(['Work Costs', `-£${formatNumber(Math.round(lastCalculation.annualWorkCosts))}`]);
+    taxItems.push(['Take-Home', `£${formatNumber(Math.round(tax.netSalary - lastCalculation.annualWorkCosts))}`]);
+
+    taxItems.forEach(([label, value]) => {
+        doc.text(label, 25, y);
+        doc.text(value, 90, y, { align: 'right' });
+        y += 8;
+    });
+
+    doc.text(`Effective Tax Rate: ${tax.effectiveTaxRate.toFixed(1)}%`, 25, y + 5);
+    doc.text(`Marginal Rate: ${tax.effectiveMarginalRate.toFixed(1)}%`, 25, y + 13);
+
+    // Time Breakdown
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Time Breakdown (Weekly)', 120, 125);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    y = 135;
+    const time = lastCalculation.timeBreakdown;
+
+    const timeItems = [
+        ['Contract Hours', formatTimeHM(time.weeklyContractHours)],
+        ['Commute', `+${formatTimeHM(time.weeklyCommuteHours)}`],
+        ['Unpaid Breaks', `+${formatTimeHM(time.weeklyBreakHours)}`],
+        ['Prep Time', `+${formatTimeHM(time.weeklyPrepHours)}`],
+        ['Total Weekly', formatTimeHM(time.weeklyTotalHours)],
+    ];
+
+    timeItems.forEach(([label, value]) => {
+        doc.text(label, 125, y);
+        doc.text(value, 185, y, { align: 'right' });
+        y += 8;
+    });
+
+    doc.text(`Annual Contract: ${formatNumber(Math.round(time.annualContractHours))}h`, 125, y + 5);
+    doc.text(`Annual True: ${formatNumber(Math.round(time.annualTotalHours))}h`, 125, y + 13);
+
+    // Insights
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Key Insights', 20, 210);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+
+    const hiddenHours = time.weeklyTotalHours - time.weeklyContractHours;
+    const annualHiddenHours = (hiddenHours * time.workingWeeks).toFixed(0);
+    const hourlyDiff = lastCalculation.assumedHourlyRate - lastCalculation.trueHourlyRate;
+
+    const insights = [
+        `• You spend ${formatTimeHM(hiddenHours)} extra per week on work-related activities (${annualHiddenHours}h/year)`,
+        `• Your true rate is £${hourlyDiff.toFixed(2)}/hour less than assumed`,
+        `• Every £100 purchase costs you ${(100 / lastCalculation.trueHourlyRate).toFixed(1)} hours of your life`,
+    ];
+
+    if (lastCalculation.salary > 100000 && lastCalculation.salary <= 125140) {
+        insights.push(`• WARNING: You're in the £100K tax trap with a ${lastCalculation.region === 'scotland' ? '67.5%' : '60%'} marginal rate`);
+    }
+
+    y = 220;
+    insights.forEach(insight => {
+        doc.text(insight, 20, y);
+        y += 8;
+    });
+
+    // Footer
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text('Generated by TrueWage | truewage.co.uk | For illustrative purposes only', 105, 285, { align: 'center' });
+
+    // Save
+    doc.save('truewage-report.pdf');
+
+    // Increment counter
+    incrementPdfDownload();
+    updatePdfButton();
+}
+
+function loadScript(src) {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+}
+
+function showPremiumModal() {
+    const modal = document.getElementById('premiumModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+}
+
+function closePremiumModal() {
+    const modal = document.getElementById('premiumModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+}
+
+function updatePdfButton() {
+    const btn = document.getElementById('downloadPdfBtn');
+    const badge = document.getElementById('pdfFreeBadge');
+    if (!btn) return;
+
+    if (canDownloadFreePdf()) {
+        btn.textContent = 'Download PDF Report';
+        if (badge) badge.classList.remove('hidden');
+    } else {
+        btn.innerHTML = 'Download PDF Report <span class="text-xs opacity-70">(Premium)</span>';
+        if (badge) badge.classList.add('hidden');
+    }
+}
+
+// ============================================
+// S&P 500 OPPORTUNITY COST CALCULATOR
+// ============================================
+
+const SP500_NOMINAL_RETURN = 0.1026; // 10.26% historical average
+const SP500_REAL_RETURN = 0.07; // 7% inflation-adjusted
+const SAFE_WITHDRAWAL_RATE = 0.04; // 4% rule
+
+function calculateOpportunityCost() {
+    const amount = parseFloat(document.getElementById('spAmount')?.value) || 100;
+    const currentAge = parseInt(document.getElementById('spCurrentAge')?.value) || 30;
+    const retireAge = parseInt(document.getElementById('spRetireAge')?.value) || 65;
+    const years = retireAge - currentAge;
+
+    if (years <= 0) {
+        document.getElementById('spResults').innerHTML = '<p class="text-neutral-500">Retirement age must be greater than current age</p>';
+        return;
+    }
+
+    // Future value calculations
+    const futureNominal = amount * Math.pow(1 + SP500_NOMINAL_RETURN, years);
+    const futureReal = amount * Math.pow(1 + SP500_REAL_RETURN, years);
+
+    // Monthly retirement income using 4% rule
+    const monthlyIncomeNominal = (futureNominal * SAFE_WITHDRAWAL_RATE) / 12;
+    const monthlyIncomeReal = (futureReal * SAFE_WITHDRAWAL_RATE) / 12;
+
+    // Hours of work equivalent
+    const hoursOfWork = lastCalculation ? (amount / lastCalculation.trueHourlyRate).toFixed(1) : '?';
+
+    document.getElementById('spResults').innerHTML = `
+        <div class="grid md:grid-cols-2 gap-4 mt-6">
+            <div class="p-5 rounded-xl bg-accent/5 border border-accent/20">
+                <p class="text-xs text-accent/70 uppercase tracking-wider mb-2">Optimistic (Nominal)</p>
+                <p class="text-2xl font-bold text-accent mb-1">£${Math.round(futureNominal).toLocaleString()}</p>
+                <p class="text-sm text-neutral-400">at age ${retireAge}</p>
+                <div class="mt-3 pt-3 border-t border-accent/10">
+                    <p class="text-xs text-neutral-500">Monthly income forever:</p>
+                    <p class="text-lg font-semibold text-accent">£${monthlyIncomeNominal.toFixed(2)}/mo</p>
+                </div>
+            </div>
+            <div class="p-5 rounded-xl bg-dark-700 border border-white/5">
+                <p class="text-xs text-neutral-500 uppercase tracking-wider mb-2">Realistic (Inflation-Adjusted)</p>
+                <p class="text-2xl font-bold text-white mb-1">£${Math.round(futureReal).toLocaleString()}</p>
+                <p class="text-sm text-neutral-400">in today's money</p>
+                <div class="mt-3 pt-3 border-t border-white/5">
+                    <p class="text-xs text-neutral-500">Monthly income forever:</p>
+                    <p class="text-lg font-semibold text-white">£${monthlyIncomeReal.toFixed(2)}/mo</p>
+                </div>
+            </div>
+        </div>
+        <div class="mt-4 p-4 rounded-lg bg-dark-600/50">
+            <p class="text-sm text-neutral-400">
+                <span class="text-white font-medium">True Cost:</span> This £${amount} purchase =
+                <span class="text-accent font-semibold">${hoursOfWork} hours</span> of your life now,
+                or <span class="text-orange-400 font-semibold">£${monthlyIncomeReal.toFixed(2)}/mo</span> in retirement income forever.
+            </p>
+        </div>
+    `;
+}
+
+// ============================================
+// FIRE PROGRESS VISUALIZATION
+// ============================================
+
+function calculateFireProgress() {
+    if (!lastCalculation) return null;
+
+    const annualExpenses = parseFloat(document.getElementById('fireAnnualExpenses')?.value) || 30000;
+    const currentSavings = parseFloat(document.getElementById('fireCurrentSavings')?.value) || 0;
+
+    // FI Number = 25x annual expenses (4% rule)
+    const fiNumber = annualExpenses * 25;
+    const progress = (currentSavings / fiNumber) * 100;
+
+    // Milestones
+    const milestones = [
+        { name: 'First £10K', target: 10000, icon: '🌱' },
+        { name: '£25K', target: 25000, icon: '📈' },
+        { name: '£50K', target: 50000, icon: '🎯' },
+        { name: '£100K', target: 100000, icon: '💪' },
+        { name: 'Coast FI', target: fiNumber * 0.5, icon: '⛵' },
+        { name: 'Lean FI', target: fiNumber * 0.75, icon: '🏃' },
+        { name: 'Full FI', target: fiNumber, icon: '🎉' },
+    ];
+
+    const achievedMilestones = milestones.filter(m => currentSavings >= m.target);
+    const nextMilestone = milestones.find(m => currentSavings < m.target);
+
+    // Zone colors
+    let zoneColor = '#ef4444'; // Red
+    let zone = 'Starting Out';
+    if (progress >= 25) { zoneColor = '#f59e0b'; zone = 'Building'; }
+    if (progress >= 50) { zoneColor = '#eab308'; zone = 'Halfway'; }
+    if (progress >= 75) { zoneColor = '#84cc16'; zone = 'Almost There'; }
+    if (progress >= 100) { zoneColor = '#10b981'; zone = 'Financially Independent!'; }
+
+    return {
+        fiNumber,
+        progress: Math.min(progress, 100),
+        currentSavings,
+        milestones,
+        achievedMilestones,
+        nextMilestone,
+        zoneColor,
+        zone
+    };
+}
+
+function renderFireProgress() {
+    const container = document.getElementById('fireProgressContainer');
+    if (!container) return;
+
+    const data = calculateFireProgress();
+    if (!data) {
+        container.innerHTML = '<p class="text-neutral-500">Calculate your wage first to see FIRE progress</p>';
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="mb-6">
+            <div class="flex justify-between items-end mb-2">
+                <div>
+                    <p class="text-xs text-neutral-500 uppercase tracking-wider">Your FI Number</p>
+                    <p class="text-2xl font-bold text-white">£${Math.round(data.fiNumber).toLocaleString()}</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-xs text-neutral-500">${data.zone}</p>
+                    <p class="text-lg font-bold" style="color: ${data.zoneColor}">${data.progress.toFixed(1)}%</p>
+                </div>
+            </div>
+
+            <!-- Progress bar -->
+            <div class="h-4 bg-dark-600 rounded-full overflow-hidden relative">
+                <div class="h-full rounded-full transition-all duration-500"
+                     style="width: ${data.progress}%; background: linear-gradient(90deg, ${data.zoneColor}, #10b981)"></div>
+                <!-- Milestone markers -->
+                ${data.milestones.map(m => {
+                    const pos = Math.min((m.target / data.fiNumber) * 100, 100);
+                    return `<div class="absolute top-0 h-full w-0.5 bg-white/20" style="left: ${pos}%"></div>`;
+                }).join('')}
+            </div>
+        </div>
+
+        <!-- Milestones -->
+        <div class="grid grid-cols-4 md:grid-cols-7 gap-2">
+            ${data.milestones.map(m => {
+                const achieved = data.currentSavings >= m.target;
+                return `
+                    <div class="text-center p-2 rounded-lg ${achieved ? 'bg-accent/10 border border-accent/30' : 'bg-dark-600/50 border border-white/5'}">
+                        <span class="text-lg">${m.icon}</span>
+                        <p class="text-xs ${achieved ? 'text-accent' : 'text-neutral-500'} mt-1">${m.name}</p>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+
+        ${data.nextMilestone ? `
+            <p class="text-sm text-neutral-400 mt-4">
+                Next: <span class="text-white font-medium">${data.nextMilestone.name}</span> -
+                £${Math.round(data.nextMilestone.target - data.currentSavings).toLocaleString()} to go
+            </p>
+        ` : '<p class="text-accent mt-4 font-medium">🎉 Congratulations! You\'ve reached Financial Independence!</p>'}
+    `;
+}
+
+// ============================================
+// WHAT-IF SCENARIOS
+// ============================================
+
+function calculateWhatIfScenario(scenario) {
+    if (!lastCalculation) return null;
+
+    const base = { ...lastCalculation };
+    let modified = {};
+
+    switch (scenario) {
+        case 'wfh2':
+            // WFH 2 days = 60% commute
+            modified.commuteMinutes = parseFloat(document.getElementById('commuteMinutes').value) * 0.6;
+            modified.commuteCost = parseFloat(document.getElementById('commuteCost').value) * 0.6;
+            modified.label = 'WFH 2 days/week';
+            break;
+        case 'wfh3':
+            // WFH 3 days = 40% commute
+            modified.commuteMinutes = parseFloat(document.getElementById('commuteMinutes').value) * 0.4;
+            modified.commuteCost = parseFloat(document.getElementById('commuteCost').value) * 0.4;
+            modified.label = 'WFH 3 days/week';
+            break;
+        case 'raise10':
+            modified.salary = lastCalculation.salary * 1.10;
+            modified.label = '10% raise';
+            break;
+        case 'raise20':
+            modified.salary = lastCalculation.salary * 1.20;
+            modified.label = '20% raise';
+            break;
+    }
+
+    // Recalculate with modified values
+    const salary = modified.salary || lastCalculation.salary;
+    const commuteMinutes = modified.commuteMinutes ?? parseFloat(document.getElementById('commuteMinutes').value);
+    const commuteCost = modified.commuteCost ?? parseFloat(document.getElementById('commuteCost').value);
+
+    const taxBreakdown = calculateAllDeductions(
+        salary,
+        document.getElementById('taxRegion').value,
+        document.getElementById('studentLoan').value,
+        parseFloat(document.getElementById('pensionPercent').value)
+    );
+
+    const timeBreakdown = calculateTrueHours(
+        parseFloat(document.getElementById('contractHours').value),
+        commuteMinutes,
+        parseFloat(document.getElementById('unpaidBreak').value),
+        parseFloat(document.getElementById('prepTime').value),
+        parseFloat(document.getElementById('workDays').value),
+        parseFloat(document.getElementById('holidayDays').value)
+    );
+
+    const annualWorkCosts = (commuteCost * 12) + parseFloat(document.getElementById('workClothes').value);
+    const netAfterCosts = taxBreakdown.netSalary - annualWorkCosts;
+    const stressTax = parseFloat(document.getElementById('stressTax').value);
+    const stressAdjustedNet = netAfterCosts * (1 - stressTax / 100);
+    const trueHourlyRate = stressAdjustedNet / timeBreakdown.annualTotalHours;
+
+    return {
+        label: modified.label,
+        trueHourlyRate,
+        difference: trueHourlyRate - lastCalculation.trueHourlyRate,
+        percentChange: ((trueHourlyRate / lastCalculation.trueHourlyRate) - 1) * 100
+    };
+}
+
+function renderWhatIfScenarios() {
+    const container = document.getElementById('whatIfContainer');
+    if (!container || !lastCalculation) return;
+
+    const scenarios = ['wfh2', 'wfh3', 'raise10', 'raise20'].map(s => calculateWhatIfScenario(s));
+
+    container.innerHTML = `
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            ${scenarios.map(s => `
+                <div class="p-4 rounded-xl bg-dark-700 border ${s.difference > 0 ? 'border-accent/20' : 'border-white/5'}">
+                    <p class="text-xs text-neutral-500 mb-2">${s.label}</p>
+                    <p class="text-xl font-bold ${s.difference > 0 ? 'text-accent' : 'text-white'}">${formatCurrency(s.trueHourlyRate)}</p>
+                    <p class="text-xs mt-1 ${s.difference > 0 ? 'text-accent' : 'text-red-400'}">
+                        ${s.difference > 0 ? '+' : ''}${formatCurrency(s.difference)} (${s.percentChange > 0 ? '+' : ''}${s.percentChange.toFixed(1)}%)
+                    </p>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+// ============================================
+// EMAIL SIGNUP HANDLING
+// ============================================
+
+async function handleEmailSignup(event) {
+    event.preventDefault();
+
+    const email = document.getElementById('emailInput').value;
+    const consent = document.getElementById('gdprConsent').checked;
+    const submitBtn = document.getElementById('emailSubmitBtn');
+
+    if (!email || !consent) return;
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Subscribing...';
+
+    try {
+        // Store locally (replace with actual API call for production)
+        storeEmailSignup(email);
+
+        // Show success
+        const form = document.getElementById('emailForm');
+        form.innerHTML = '<p class="text-accent font-medium">✓ Thanks for subscribing!</p>';
+
+    } catch (error) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Subscribe';
+        alert('Failed to subscribe. Please try again.');
+    }
+}
+
+// ============================================
 // INIT
 // ============================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    loadFromUrl();
+    // Try compact URL first, then legacy format
+    if (!loadFromCompactUrl()) {
+        loadFromUrl();
+    }
 
     // Initialize time displays
     updateTimeDisplay('commuteMinutes', 'commuteDisplay');
@@ -823,8 +1569,25 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // S&P calculator inputs
+    document.querySelectorAll('#sp500Calculator input').forEach(input => {
+        input.addEventListener('input', () => {
+            calculateOpportunityCost();
+        });
+    });
+
+    // FIRE calculator inputs
+    document.querySelectorAll('#fireProgress input').forEach(input => {
+        input.addEventListener('input', () => {
+            renderFireProgress();
+        });
+    });
+
     // Render initial products (with placeholder values)
     renderProducts();
+
+    // Update PDF button state
+    updatePdfButton();
 
     // Smooth scroll for anchor links
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {

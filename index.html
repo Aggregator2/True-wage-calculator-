@@ -544,6 +544,8 @@
                     <nav class="hidden md:flex items-center gap-6 text-sm text-neutral-400">
                         <a href="#calculator" class="hover:text-white transition-colors">Calculator</a>
                         <a href="#products" class="hover:text-white transition-colors">Cost Explorer</a>
+                        <a href="#sp500Calculator" class="hover:text-white transition-colors">Opportunity Cost</a>
+                        <a href="#fireProgress" class="hover:text-white transition-colors">FIRE Tracker</a>
                         <a href="#methodology" class="hover:text-white transition-colors">How It Works</a>
                     </nav>
                 </div>
@@ -946,13 +948,19 @@
         </div>
     </section>
 
-    <!-- Share Section -->
+    <!-- Share & Export Section -->
     <section class="py-16 px-6 bg-dark-950" id="shareSection" style="display: none;">
-        <div class="max-w-3xl mx-auto">
+        <div class="max-w-4xl mx-auto space-y-6">
+            <!-- Share URL -->
             <div class="card p-6">
-                <h3 class="font-semibold text-white mb-4">Share Your Results</h3>
-                <p class="text-sm text-neutral-500 mb-4">Copy this link to share (no personal data stored)</p>
-                <div class="flex gap-3">
+                <h3 class="font-semibold text-white mb-4 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+                    </svg>
+                    Share Your Results
+                </h3>
+                <p class="text-sm text-neutral-500 mb-4">Copy this link to share your exact scenario (no personal data stored on servers)</p>
+                <div class="flex gap-3 mb-4">
                     <input type="text" id="shareUrl" readonly
                            class="input-field flex-1 px-4 py-3 text-sm text-neutral-400">
                     <button onclick="copyShareUrl()" id="copyBtn" type="button"
@@ -960,9 +968,220 @@
                         Copy
                     </button>
                 </div>
+
+                <!-- Social Share Buttons -->
+                <div class="flex flex-wrap gap-3">
+                    <button onclick="shareToTwitter()" type="button"
+                            class="btn-secondary px-4 py-2.5 inline-flex items-center gap-2 text-sm">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                        </svg>
+                        Share on X
+                    </button>
+                    <button onclick="shareToLinkedIn()" type="button"
+                            class="btn-secondary px-4 py-2.5 inline-flex items-center gap-2 text-sm">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                        </svg>
+                        Share on LinkedIn
+                    </button>
+                    <button onclick="downloadSocialCard()" type="button"
+                            class="btn-secondary px-4 py-2.5 inline-flex items-center gap-2 text-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        Download Image Card
+                    </button>
+                </div>
+            </div>
+
+            <!-- PDF Download -->
+            <div class="card p-6">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <h3 class="font-semibold text-white mb-2 flex items-center gap-2">
+                            <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            Download PDF Report
+                        </h3>
+                        <p class="text-sm text-neutral-500 mb-4">Get a detailed breakdown with insights and action items</p>
+                    </div>
+                    <button onclick="generatePdfReport()" id="downloadPdfBtn" type="button"
+                            class="btn-primary px-5 py-3 inline-flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <span>Download PDF</span>
+                        <span id="pdfFreeBadge" class="text-xs bg-white/20 px-2 py-0.5 rounded-full">(Free)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- "What If" Scenarios -->
+            <div class="card p-6">
+                <h3 class="font-semibold text-white mb-4 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    What If...?
+                </h3>
+                <p class="text-sm text-neutral-500 mb-4">See how changes would affect your true hourly wage</p>
+                <div id="whatIfContainer"></div>
             </div>
         </div>
     </section>
+
+    <!-- S&P 500 Opportunity Cost Calculator -->
+    <section id="sp500Calculator" class="py-16 px-6 bg-dark-900">
+        <div class="max-w-4xl mx-auto">
+            <div class="text-center mb-10">
+                <div class="tag mb-4 mx-auto w-fit">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clip-rule="evenodd"/>
+                    </svg>
+                    Opportunity Cost Calculator
+                </div>
+                <h2 class="text-3xl font-bold text-white mb-3">What's That Purchase Really Costing You?</h2>
+                <p class="text-neutral-400 max-w-xl mx-auto">See how today's spending affects your future wealth based on S&P 500 historical returns</p>
+            </div>
+
+            <div class="card p-8">
+                <div class="grid md:grid-cols-3 gap-6 mb-6">
+                    <div>
+                        <label for="spAmount" class="block text-sm text-neutral-400 mb-2">Purchase Amount</label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 font-medium">£</span>
+                            <input type="number" id="spAmount" value="100" min="1" step="10"
+                                   class="input-field w-full pl-9 pr-4 py-3.5">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="spCurrentAge" class="block text-sm text-neutral-400 mb-2">Your Current Age</label>
+                        <input type="number" id="spCurrentAge" value="30" min="18" max="80"
+                               class="input-field w-full px-4 py-3.5">
+                    </div>
+                    <div>
+                        <label for="spRetireAge" class="block text-sm text-neutral-400 mb-2">Retirement Age</label>
+                        <input type="number" id="spRetireAge" value="65" min="40" max="90"
+                               class="input-field w-full px-4 py-3.5">
+                    </div>
+                </div>
+
+                <button onclick="calculateOpportunityCost()" type="button"
+                        class="btn-primary w-full py-4 text-base font-semibold mb-4">
+                    Calculate Retirement Impact
+                </button>
+
+                <div id="spResults">
+                    <p class="text-neutral-500 text-center py-8">Enter an amount and click calculate to see the impact</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FIRE Progress Tracker -->
+    <section id="fireProgress" class="py-16 px-6 bg-dark-950">
+        <div class="max-w-4xl mx-auto">
+            <div class="text-center mb-10">
+                <h2 class="text-3xl font-bold text-white mb-3">FIRE Progress Tracker</h2>
+                <p class="text-neutral-400">Track your journey to Financial Independence</p>
+            </div>
+
+            <div class="card p-8">
+                <div class="grid md:grid-cols-2 gap-6 mb-8">
+                    <div>
+                        <label for="fireCurrentSavings" class="block text-sm text-neutral-400 mb-2">Current Savings/Investments</label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 font-medium">£</span>
+                            <input type="number" id="fireCurrentSavings" value="25000" min="0" step="1000"
+                                   class="input-field w-full pl-9 pr-4 py-3.5">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="fireAnnualExpenses" class="block text-sm text-neutral-400 mb-2">Annual Expenses</label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 font-medium">£</span>
+                            <input type="number" id="fireAnnualExpenses" value="30000" min="1000" step="1000"
+                                   class="input-field w-full pl-9 pr-4 py-3.5">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="fireProgressContainer">
+                    <p class="text-neutral-500 text-center py-8">Calculate your wage first to see FIRE progress</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Email Signup Banner (Optional, Non-blocking) -->
+    <section id="emailSignup" class="py-10 px-6 bg-dark-800 border-y border-white/5">
+        <div class="max-w-2xl mx-auto">
+            <div class="card p-6 bg-gradient-to-r from-accent/5 to-transparent border-accent/20">
+                <div class="flex flex-col md:flex-row items-center gap-6">
+                    <div class="flex-1 text-center md:text-left">
+                        <h3 class="font-semibold text-white mb-1">Get Weekly FIRE Tips</h3>
+                        <p class="text-sm text-neutral-400">Join 500+ UK-based savers. No spam, unsubscribe anytime.</p>
+                    </div>
+                    <form id="emailForm" onsubmit="handleEmailSignup(event)" class="flex gap-2 w-full md:w-auto">
+                        <input type="email" id="emailInput" placeholder="your@email.com" required
+                               class="input-field px-4 py-2.5 text-sm w-full md:w-48">
+                        <button type="submit" id="emailSubmitBtn" class="btn-primary px-5 py-2.5 text-sm font-medium whitespace-nowrap">
+                            Subscribe
+                        </button>
+                    </form>
+                </div>
+                <p class="text-xs text-neutral-600 mt-3 text-center md:text-left">
+                    <label class="inline-flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="gdprConsent" required class="rounded bg-dark-600 border-white/10 text-accent focus:ring-accent/50">
+                        <span>I agree to receive emails and can unsubscribe anytime</span>
+                    </label>
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Premium Modal -->
+    <div id="premiumModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 items-center justify-center p-4">
+        <div class="card card-glow max-w-md w-full p-8">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold text-white mb-2">You've used your free PDF</h3>
+                <p class="text-neutral-400 text-sm">Want unlimited downloads and more features?</p>
+            </div>
+
+            <div class="space-y-3 mb-6">
+                <button onclick="window.open('https://buy.stripe.com/premium-10-pdfs', '_blank')" class="w-full p-4 rounded-xl border border-white/10 hover:border-accent/50 transition-colors text-left group">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="font-semibold text-white group-hover:text-accent transition-colors">10 PDF Downloads</p>
+                            <p class="text-sm text-neutral-500">One-time purchase</p>
+                        </div>
+                        <span class="text-accent font-bold">£8</span>
+                    </div>
+                </button>
+
+                <button onclick="window.open('https://buy.stripe.com/premium-unlimited', '_blank')" class="w-full p-4 rounded-xl border border-accent/30 bg-accent/5 hover:bg-accent/10 transition-colors text-left group">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="font-semibold text-accent">Unlimited + Save Scenarios</p>
+                            <p class="text-sm text-neutral-400">Track your progress over time</p>
+                        </div>
+                        <span class="text-accent font-bold">£7/mo</span>
+                    </div>
+                </button>
+            </div>
+
+            <button onclick="closePremiumModal()" class="w-full py-3 text-neutral-500 hover:text-neutral-300 text-sm transition-colors">
+                Maybe later
+            </button>
+        </div>
+    </div>
 
     <!-- Methodology Section -->
     <section id="methodology" class="py-16 px-6 bg-dark-900">
