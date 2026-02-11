@@ -2,12 +2,22 @@
   "name": "uk-freedom-calculator",
   "version": "0.1.0",
   "private": true,
+  "description": "UK True Hourly Wage Calculator - Calculate your real hourly wage after UK taxes, commute time, and unpaid work hours",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
+  "keywords": [
+    "uk",
+    "tax",
+    "calculator",
+    "hourly-wage",
+    "personal-finance"
+  ],
+  "author": "",
+  "license": "MIT",
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
     "@stripe/react-stripe-js": "^5.6.0",
