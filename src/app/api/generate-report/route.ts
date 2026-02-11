@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { generateReportData, generateAIAnalysis, collectComprehensiveUserData } from '@/lib/openrouter';
 import { generateReportPDF, generateProfessionalPDF, exportScenariosJSON } from '@/lib/report-generator';
 import { generatePremiumPDF } from '@/lib/premium-report-generator';
@@ -9,17 +9,23 @@ import type { MultiScenario } from '@/lib/scenarios';
 // Allow up to 5 minutes for AI-powered report generation
 export const maxDuration = 300;
 
-// Create Supabase admin client for database operations
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Lazy Supabase admin client initialization
+let _supabaseAdmin: SupabaseClient | null = null;
+function getSupabaseAdmin(): SupabaseClient {
+  if (!_supabaseAdmin) {
+    _supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    );
+  }
+  return _supabaseAdmin;
+}
 
 // Helper to verify user from JWT token
 async function verifyUser(token: string) {
   const supabaseAuth = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
     {
       global: {
         headers: {
@@ -57,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user has premium subscription and report limits
-    const { data: profile } = await supabaseAdmin
+    const { data: profile } = await getSupabaseAdmin()
       .from('user_profiles')
       .select('subscription_status, email, reports_generated_this_month, last_report_generated_at, has_generated_preview')
       .eq('id', user.id)
@@ -77,7 +83,7 @@ export async function POST(request: NextRequest) {
                        now.getFullYear() !== lastGenerated.getFullYear();
 
     if (isNewMonth && profile) {
-      await supabaseAdmin
+      await getSupabaseAdmin()
         .from('user_profiles')
         .update({ reports_generated_this_month: 0 })
         .eq('id', user.id);
@@ -157,7 +163,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Fallback: Fetch user's scenarios from database
-    const { data: primaryScenario, error: primaryError } = await supabaseAdmin
+    const { data: primaryScenario, error: primaryError } = await getSupabaseAdmin()
       .from('scenarios')
       .select('*')
       .eq('user_id', user.id)
@@ -166,7 +172,7 @@ export async function POST(request: NextRequest) {
 
     if (primaryError || !primaryScenario) {
       // Fallback: try to get from saved_scenarios (legacy)
-      const { data: legacyScenario } = await supabaseAdmin
+      const { data: legacyScenario } = await getSupabaseAdmin()
         .from('saved_scenarios')
         .select('*')
         .eq('user_id', user.id)
@@ -202,7 +208,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch comparison scenarios
-    const { data: comparisonScenarios } = await supabaseAdmin
+    const { data: comparisonScenarios } = await getSupabaseAdmin()
       .from('scenarios')
       .select('*')
       .eq('user_id', user.id)
@@ -251,7 +257,7 @@ async function generateReport(
 
       // Track report generation
       try {
-        await supabaseAdmin.from('report_generations').insert({
+        await getSupabaseAdmin().from('report_generations').insert({
           user_id: userId,
           report_type: 'comprehensive',
           scenarios_included: [primary.id, ...comparisons.map((c) => c.id)],
@@ -270,7 +276,7 @@ async function generateReport(
           updates.reports_generated_this_month = (userProfile?.reports_generated_this_month || 0) + 1;
         }
 
-        await supabaseAdmin
+        await getSupabaseAdmin()
           .from('user_profiles')
           .update(updates)
           .eq('id', userId);
@@ -353,7 +359,7 @@ async function generateReport(
 
   // Track report generation
   try {
-    await supabaseAdmin.from('report_generations').insert({
+    await getSupabaseAdmin().from('report_generations').insert({
       user_id: userId,
       report_type: format,
       scenarios_included: [primary.id, ...comparisons.map((c) => c.id)],
@@ -410,7 +416,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check premium status (stored in user_profiles)
-    const { data: profile } = await supabaseAdmin
+    const { data: profile } = await getSupabaseAdmin()
       .from('user_profiles')
       .select('subscription_status')
       .eq('id', user.id)
@@ -419,7 +425,7 @@ export async function GET(request: NextRequest) {
     const isPremium = profile?.subscription_status === 'premium' || profile?.subscription_status === 'lifetime';
 
     // Check how many reports user has generated (for free tier limit)
-    const { count: reportCount } = await supabaseAdmin
+    const { count: reportCount } = await getSupabaseAdmin()
       .from('report_generations')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id);
@@ -437,7 +443,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if user has scenario data - try new scenarios table first
-    const { data: primaryScenario, error: primaryError } = await supabaseAdmin
+    const { data: primaryScenario, error: primaryError } = await getSupabaseAdmin()
       .from('scenarios')
       .select('id')
       .eq('user_id', user.id)
@@ -447,7 +453,7 @@ export async function GET(request: NextRequest) {
     console.log('Primary scenario check:', { primaryScenario, primaryError, userId: user.id });
 
     // Also check for ANY scenario (not just primary)
-    const { data: anyScenario, error: anyError } = await supabaseAdmin
+    const { data: anyScenario, error: anyError } = await getSupabaseAdmin()
       .from('scenarios')
       .select('id')
       .eq('user_id', user.id)
@@ -458,7 +464,7 @@ export async function GET(request: NextRequest) {
 
     if (!primaryScenario && !anyScenario) {
       // Check legacy saved_scenarios table
-      const { data: legacyScenario, error: legacyError } = await supabaseAdmin
+      const { data: legacyScenario, error: legacyError } = await getSupabaseAdmin()
         .from('saved_scenarios')
         .select('id')
         .eq('user_id', user.id)
@@ -477,7 +483,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Count comparison scenarios
-    const { count: comparisonCount } = await supabaseAdmin
+    const { count: comparisonCount } = await getSupabaseAdmin()
       .from('scenarios')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id)

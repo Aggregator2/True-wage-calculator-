@@ -1,15 +1,25 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+let _stripe: Stripe | null = null;
+function getStripe(): Stripe {
+  if (!_stripe) {
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+  }
+  return _stripe;
+}
 
-// Use service role key for server-side operations
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+let _supabase: SupabaseClient | null = null;
+function getSupabaseAdmin(): SupabaseClient {
+  if (!_supabase) {
+    _supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    );
+  }
+  return _supabase;
+}
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -22,7 +32,7 @@ export async function POST(request: Request) {
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    event = getStripe().webhooks.constructEvent(body, signature, process.env.STRIPE_WEBHOOK_SECRET || '');
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     console.error('Webhook signature verification failed:', message);
@@ -47,12 +57,12 @@ export async function POST(request: Request) {
 
     let expiresAt: string | null = null;
     if (!isLifetime && subscriptionId) {
-      const subscriptionResponse = await stripe.subscriptions.retrieve(subscriptionId);
+      const subscriptionResponse = await getStripe().subscriptions.retrieve(subscriptionId);
       const subscriptionData = subscriptionResponse as unknown as { current_period_end: number };
       expiresAt = new Date(subscriptionData.current_period_end * 1000).toISOString();
     }
 
-    const { error } = await supabase
+    const { error } = await getSupabaseAdmin()
       .from('user_profiles')
       .update({
         subscription_status: isLifetime ? 'lifetime' : 'premium',
@@ -84,7 +94,7 @@ export async function POST(request: Request) {
     }
 
     // Find user by stripe_customer_id
-    const { data: profile } = await supabase
+    const { data: profile } = await getSupabaseAdmin()
       .from('user_profiles')
       .select('id, subscription_status')
       .eq('stripe_customer_id', customerId)
@@ -94,7 +104,7 @@ export async function POST(request: Request) {
     let userId = profile?.id;
     if (!userId) {
       try {
-        const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
+        const customer = await getStripe().customers.retrieve(customerId) as Stripe.Customer;
         const metaUserId = customer.metadata?.supabase_user_id;
         if (metaUserId) {
           userId = metaUserId;
@@ -108,7 +118,7 @@ export async function POST(request: Request) {
       let expiresAt: string | null = null;
       if (subscriptionId) {
         try {
-          const sub = await stripe.subscriptions.retrieve(subscriptionId);
+          const sub = await getStripe().subscriptions.retrieve(subscriptionId);
           const subData = sub as unknown as { current_period_end: number };
           expiresAt = new Date(subData.current_period_end * 1000).toISOString();
         } catch (e) {
@@ -116,7 +126,7 @@ export async function POST(request: Request) {
         }
       }
 
-      const { error } = await supabase
+      const { error } = await getSupabaseAdmin()
         .from('user_profiles')
         .update({
           subscription_status: 'premium',
@@ -145,7 +155,7 @@ export async function POST(request: Request) {
     const customerId = typeof paymentIntent.customer === 'string' ? paymentIntent.customer : (paymentIntent.customer as any)?.id;
 
     if (userId && planType === 'lifetime') {
-      const { error } = await supabase
+      const { error } = await getSupabaseAdmin()
         .from('user_profiles')
         .update({
           subscription_status: 'lifetime',
@@ -168,14 +178,14 @@ export async function POST(request: Request) {
       if (subscriptionId) {
         let expiresAt: string | null = null;
         try {
-          const sub = await stripe.subscriptions.retrieve(subscriptionId);
+          const sub = await getStripe().subscriptions.retrieve(subscriptionId);
           const subData = sub as unknown as { current_period_end: number };
           expiresAt = new Date(subData.current_period_end * 1000).toISOString();
         } catch (e) {
           console.error('Could not retrieve subscription:', e);
         }
 
-        const { error } = await supabase
+        const { error } = await getSupabaseAdmin()
           .from('user_profiles')
           .update({
             subscription_status: 'premium',
@@ -208,7 +218,7 @@ export async function POST(request: Request) {
       const subData = subscription as unknown as { current_period_end: number };
       const expiresAt = new Date(subData.current_period_end * 1000).toISOString();
 
-      await supabase
+      await getSupabaseAdmin()
         .from('user_profiles')
         .update({
           subscription_status: 'premium',
@@ -229,7 +239,7 @@ export async function POST(request: Request) {
     const subscriptionData = subscription as unknown as { customer: string; current_period_end: number; status: string };
     const customerId = subscriptionData.customer;
 
-    const { data: profile } = await supabase
+    const { data: profile } = await getSupabaseAdmin()
       .from('user_profiles')
       .select('id')
       .eq('stripe_customer_id', customerId)
@@ -239,7 +249,7 @@ export async function POST(request: Request) {
       const expiresAt = new Date(subscriptionData.current_period_end * 1000).toISOString();
       const status = subscriptionData.status === 'active' ? 'premium' : 'free';
 
-      await supabase
+      await getSupabaseAdmin()
         .from('user_profiles')
         .update({
           subscription_status: status,
@@ -258,14 +268,14 @@ export async function POST(request: Request) {
     const subscriptionData = subscription as unknown as { customer: string };
     const customerId = subscriptionData.customer;
 
-    const { data: profile } = await supabase
+    const { data: profile } = await getSupabaseAdmin()
       .from('user_profiles')
       .select('id')
       .eq('stripe_customer_id', customerId)
       .single();
 
     if (profile) {
-      await supabase
+      await getSupabaseAdmin()
         .from('user_profiles')
         .update({
           subscription_status: 'free',

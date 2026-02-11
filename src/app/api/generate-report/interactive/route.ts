@@ -1,20 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { generateAIAnalysis, collectComprehensiveUserData } from '@/lib/openrouter';
 import type { MultiScenario } from '@/lib/scenarios';
 
 // Allow up to 5 minutes for AI-powered report generation
 export const maxDuration = 300;
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+let _supabaseAdmin: SupabaseClient | null = null;
+function getSupabaseAdmin(): SupabaseClient {
+  if (!_supabaseAdmin) {
+    _supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    );
+  }
+  return _supabaseAdmin;
+}
 
 async function verifyUser(token: string) {
   const supabaseAuth = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
     {
       global: {
         headers: { Authorization: `Bearer ${token}` },
@@ -39,7 +45,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check subscription
-    const { data: profile } = await supabaseAdmin
+    const { data: profile } = await getSupabaseAdmin()
       .from('user_profiles')
       .select('subscription_status, email, reports_generated_this_month, last_report_generated_at, has_generated_preview')
       .eq('id', user.id)
@@ -55,7 +61,7 @@ export async function POST(request: NextRequest) {
       now.getFullYear() !== lastGenerated.getFullYear();
 
     if (isNewMonth && profile) {
-      await supabaseAdmin
+      await getSupabaseAdmin()
         .from('user_profiles')
         .update({ reports_generated_this_month: 0 })
         .eq('id', user.id);
@@ -110,7 +116,7 @@ export async function POST(request: NextRequest) {
       };
     } else {
       // Fetch from DB
-      const { data: primaryScenario } = await supabaseAdmin
+      const { data: primaryScenario } = await getSupabaseAdmin()
         .from('scenarios')
         .select('*')
         .eq('user_id', user.id)
@@ -119,7 +125,7 @@ export async function POST(request: NextRequest) {
 
       if (primaryScenario) {
         primary = primaryScenario as MultiScenario;
-        const { data: compScenarios } = await supabaseAdmin
+        const { data: compScenarios } = await getSupabaseAdmin()
           .from('scenarios')
           .select('*')
           .eq('user_id', user.id)
@@ -127,7 +133,7 @@ export async function POST(request: NextRequest) {
         comparisons = (compScenarios || []) as MultiScenario[];
       } else {
         // Legacy fallback
-        const { data: legacyScenario } = await supabaseAdmin
+        const { data: legacyScenario } = await getSupabaseAdmin()
           .from('saved_scenarios')
           .select('*')
           .eq('user_id', user.id)
@@ -191,7 +197,7 @@ export async function POST(request: NextRequest) {
 
     // Track generation
     try {
-      await supabaseAdmin.from('report_generations').insert({
+      await getSupabaseAdmin().from('report_generations').insert({
         user_id: user.id,
         report_type: 'interactive',
         scenarios_included: [primary.id, ...comparisons.map(c => c.id)],
@@ -204,7 +210,7 @@ export async function POST(request: NextRequest) {
       } else {
         updates.reports_generated_this_month = (profile?.reports_generated_this_month || 0) + 1;
       }
-      await supabaseAdmin.from('user_profiles').update(updates).eq('id', user.id);
+      await getSupabaseAdmin().from('user_profiles').update(updates).eq('id', user.id);
     } catch (e) {
       console.error('Failed to track:', e);
     }

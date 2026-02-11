@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+let _stripe: Stripe | null = null;
+function getStripe(): Stripe {
+  if (!_stripe) {
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+  }
+  return _stripe;
+}
 
 export async function POST(request: Request) {
   try {
@@ -28,7 +34,7 @@ export async function POST(request: Request) {
 
     if (isLifetime) {
       // For one-time payments, get the price by lookup key
-      const prices = await stripe.prices.list({
+      const prices = await getStripe().prices.list({
         lookup_keys: [lookupKey],
         expand: ['data.product'],
       });
@@ -40,7 +46,7 @@ export async function POST(request: Request) {
         );
       }
 
-      session = await stripe.checkout.sessions.create({
+      session = await getStripe().checkout.sessions.create({
         mode: 'payment',
         payment_method_types: ['card'],
         customer_email: userEmail,
@@ -59,7 +65,7 @@ export async function POST(request: Request) {
       });
     } else {
       // For subscriptions, use lookup key directly
-      const prices = await stripe.prices.list({
+      const prices = await getStripe().prices.list({
         lookup_keys: [lookupKey],
         expand: ['data.product'],
       });
@@ -71,7 +77,7 @@ export async function POST(request: Request) {
         );
       }
 
-      session = await stripe.checkout.sessions.create({
+      session = await getStripe().checkout.sessions.create({
         mode: 'subscription',
         payment_method_types: ['card'],
         customer_email: userEmail,

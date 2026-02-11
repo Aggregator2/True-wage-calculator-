@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+let _stripe: Stripe | null = null;
+function getStripe(): Stripe {
+  if (!_stripe) {
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+  }
+  return _stripe;
+}
 
 export async function POST(request: Request) {
   try {
@@ -17,7 +23,7 @@ export async function POST(request: Request) {
     }
 
     // Get the price from lookup key
-    const prices = await stripe.prices.list({
+    const prices = await getStripe().prices.list({
       lookup_keys: [lookupKey],
       active: true,
       limit: 1,
@@ -38,7 +44,7 @@ export async function POST(request: Request) {
     console.log('Price:', { id: price.id, type: price.type, amount: price.unit_amount });
 
     // Check if customer already exists
-    const existingCustomers = await stripe.customers.list({
+    const existingCustomers = await getStripe().customers.list({
       email: userEmail,
       limit: 1,
     });
@@ -48,14 +54,14 @@ export async function POST(request: Request) {
       customerId = existingCustomers.data[0].id;
       console.log('Existing customer:', customerId);
       // Update metadata if not set
-      await stripe.customers.update(customerId, {
+      await getStripe().customers.update(customerId, {
         metadata: {
           supabase_user_id: userId,
         },
       });
     } else {
       // Create a new customer
-      const customer = await stripe.customers.create({
+      const customer = await getStripe().customers.create({
         email: userEmail,
         metadata: {
           supabase_user_id: userId,
@@ -70,7 +76,7 @@ export async function POST(request: Request) {
 
       // Create a SetupIntent for collecting payment method first
       // This is more reliable than trying to expand payment_intent on the invoice
-      const subscription = await stripe.subscriptions.create({
+      const subscription = await getStripe().subscriptions.create({
         customer: customerId,
         items: [{ price: price.id }],
         payment_behavior: 'default_incomplete',
@@ -97,11 +103,11 @@ export async function POST(request: Request) {
         // If the invoice is in draft, finalize it
         if (invoice.status === 'draft') {
           console.log('Finalizing invoice...');
-          await stripe.invoices.finalizeInvoice(invoice.id);
+          await getStripe().invoices.finalizeInvoice(invoice.id);
         }
 
         // Retrieve the invoice with the payment intent expanded
-        const finalInvoice = await stripe.invoices.retrieve(invoice.id, {
+        const finalInvoice = await getStripe().invoices.retrieve(invoice.id, {
           expand: ['payment_intent'],
         }) as Stripe.Invoice & { payment_intent?: Stripe.PaymentIntent | string | null };
 
@@ -134,7 +140,7 @@ export async function POST(request: Request) {
 
       // Last resort: Create a payment intent manually
       console.log('Creating payment intent manually...');
-      const paymentIntent = await stripe.paymentIntents.create({
+      const paymentIntent = await getStripe().paymentIntents.create({
         amount: price.unit_amount!,
         currency: price.currency,
         customer: customerId,
@@ -163,7 +169,7 @@ export async function POST(request: Request) {
       // For one-time payment (lifetime)
       console.log('Creating one-time payment intent...');
 
-      const paymentIntent = await stripe.paymentIntents.create({
+      const paymentIntent = await getStripe().paymentIntents.create({
         amount: price.unit_amount!,
         currency: price.currency,
         customer: customerId,

@@ -1,15 +1,21 @@
 import OpenAI from 'openai';
 
-// OpenRouter client configuration
+// OpenRouter client configuration - lazy initialization
 // Works with OpenAI SDK but routes to OpenRouter
-const openrouter = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY!,
-  defaultHeaders: {
-    'HTTP-Referer': process.env.NEXT_PUBLIC_URL || 'https://truewage.uk',
-    'X-Title': 'TrueWage UK FIRE Calculator',
-  },
-});
+let _openrouter: OpenAI | null = null;
+function getOpenRouter(): OpenAI {
+  if (!_openrouter) {
+    _openrouter = new OpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: process.env.OPENROUTER_API_KEY || '',
+      defaultHeaders: {
+        'HTTP-Referer': process.env.NEXT_PUBLIC_URL || 'https://truewage.uk',
+        'X-Title': 'TrueWage UK FIRE Calculator',
+      },
+    });
+  }
+  return _openrouter;
+}
 
 // Model constants - Cost-optimized approach
 // Using Haiku for 90% cost reduction while maintaining quality
@@ -35,7 +41,7 @@ export async function generateText(
   model: ModelType = 'FAST'
 ): Promise<string> {
   try {
-    const response = await openrouter.chat.completions.create({
+    const response = await getOpenRouter().chat.completions.create({
       model: MODELS[model],
       messages: [
         { role: 'system', content: systemPrompt },
