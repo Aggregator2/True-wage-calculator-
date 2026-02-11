@@ -10,8 +10,8 @@ export async function GET(request: Request) {
     const cookieStore = await cookies();
 
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
       {
         cookies: {
           getAll() {
@@ -29,6 +29,6 @@ export async function GET(request: Request) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  // Redirect to the home page after authentication
-  return NextResponse.redirect(new URL('/', requestUrl.origin));
+  // Redirect to the dashboard after authentication
+  return NextResponse.redirect(new URL('/dashboard', requestUrl.origin));
 }
