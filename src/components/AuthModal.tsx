@@ -125,15 +125,17 @@ export default function AuthModal() {
     setError(null);
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          emailRedirectTo: `${getSiteUrl()}/auth/callback`,
-        },
       });
       if (error) throw error;
-      setMessage('Check your email for a confirmation link!');
+      // With email confirmation disabled, signUp returns a session directly.
+      // The onAuthStateChange listener will handle closing the modal.
+      if (!data.session) {
+        // Fallback if email confirmation is still enabled in Supabase
+        setMessage('Check your email for a confirmation link!');
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to sign up';
       setError(message);

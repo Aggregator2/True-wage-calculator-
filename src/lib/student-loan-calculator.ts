@@ -1,6 +1,8 @@
 // Multiple Student Loan Calculator
 // Handles Plan 1, 2, 4, 5, and Postgraduate loans simultaneously
 
+import { TAX_CONFIG } from './tax-config';
+
 export type LoanPlan = 'plan1' | 'plan2' | 'plan4' | 'plan5' | 'postgrad';
 
 export interface StudentLoan {
@@ -60,13 +62,13 @@ export interface StudentLoanResults {
   };
 }
 
-// 2024/25 thresholds and rates
+// Thresholds and repayment rates sourced from TAX_CONFIG (2025/26)
+// Interest rates, write-off periods, and metadata are loan-specific
 export const LOAN_PLANS: Record<LoanPlan, LoanPlanDetails> = {
   plan1: {
     name: 'Plan 1',
     description: 'Started before Sept 2012 (England/Wales) or Scotland/NI',
-    threshold: 24990,
-    rate: 0.09,
+    ...TAX_CONFIG.studentLoans.plan1,
     interestRate: 0.0625, // 6.25% (RPI as of 2024)
     writeOffYears: 25,
     writeOffAge: 65,
@@ -74,16 +76,14 @@ export const LOAN_PLANS: Record<LoanPlan, LoanPlanDetails> = {
   plan2: {
     name: 'Plan 2',
     description: 'Started Sept 2012 or later (England/Wales)',
-    threshold: 27295,
-    rate: 0.09,
+    ...TAX_CONFIG.studentLoans.plan2,
     interestRate: 0.078, // RPI + 3% (max rate)
     writeOffYears: 30,
   },
   plan4: {
     name: 'Plan 4',
     description: 'Scotland only (from Sept 1998)',
-    threshold: 31395,
-    rate: 0.09,
+    ...TAX_CONFIG.studentLoans.plan4,
     interestRate: 0.0625,
     writeOffYears: 30,
     writeOffAge: 65,
@@ -91,16 +91,14 @@ export const LOAN_PLANS: Record<LoanPlan, LoanPlanDetails> = {
   plan5: {
     name: 'Plan 5',
     description: 'Started Aug 2023 or later (England)',
-    threshold: 25000,
-    rate: 0.09,
+    ...TAX_CONFIG.studentLoans.plan5,
     interestRate: 0.078, // RPI + 3% (while studying, lower after)
     writeOffYears: 40,
   },
   postgrad: {
     name: 'Postgraduate Loan',
     description: 'Master\'s or Doctoral loan',
-    threshold: 21000,
-    rate: 0.06, // 6% rate
+    ...TAX_CONFIG.studentLoans.postgrad,
     interestRate: 0.078,
     writeOffYears: 30,
   },

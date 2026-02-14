@@ -1,6 +1,8 @@
 // Pension Matching Impact Calculator
 // Shows the true value of employer pension contributions
 
+import { TAX_CONFIG } from './tax-config';
+
 export interface PensionInputs {
   grossSalary: number;
   employeeContributionPercent: number;
@@ -52,22 +54,22 @@ export interface PensionResults {
   insights: string[];
 }
 
-// UK Tax bands 2024/25
+// Derive tax bands and NI rates from central config (2025/26)
+const englandBands = TAX_CONFIG.england.bands;
 const TAX_BANDS = {
-  personalAllowance: 12570,
-  basicRateLimit: 50270,
-  higherRateLimit: 125140,
-  basicRate: 0.20,
-  higherRate: 0.40,
-  additionalRate: 0.45,
+  personalAllowance: TAX_CONFIG.personalAllowance,
+  basicRateLimit: englandBands[1].threshold,   // 50270
+  higherRateLimit: englandBands[2].threshold,   // 125140
+  basicRate: englandBands[1].rate,              // 0.20
+  higherRate: englandBands[2].rate,             // 0.40
+  additionalRate: englandBands[3].rate,         // 0.45
 };
 
-// National Insurance rates 2024/25
 const NI_RATES = {
-  primaryThreshold: 12570,
-  upperEarningsLimit: 50270,
-  mainRate: 0.08,
-  higherRate: 0.02,
+  primaryThreshold: TAX_CONFIG.nationalInsurance.primaryThreshold,
+  upperEarningsLimit: TAX_CONFIG.nationalInsurance.upperEarningsLimit,
+  mainRate: TAX_CONFIG.nationalInsurance.mainRate,
+  higherRate: TAX_CONFIG.nationalInsurance.upperRate,
 };
 
 // State pension 2024/25

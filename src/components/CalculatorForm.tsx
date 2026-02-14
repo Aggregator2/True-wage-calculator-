@@ -4,20 +4,13 @@ import { useState } from 'react';
 import { useCalculatorStore } from '@/lib/store';
 import { calculate } from '@/lib/calculator';
 import { savePrimaryScenario } from '@/lib/scenarios';
+import { formatSalary, parseSalary } from '@/lib/utils';
 import type { TaxRegion, StudentLoanPlan } from '@/types/calculator';
 
 export default function CalculatorForm() {
   const { inputs, setInputs, setResults, user } = useCalculatorStore();
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  const formatSalary = (value: number): string => {
-    return value.toLocaleString('en-GB');
-  };
-
-  const parseSalary = (value: string): number => {
-    return parseInt(value.replace(/,/g, ''), 10) || 0;
-  };
 
   const formatMinutes = (minutes: number): string => {
     if (minutes < 60) return `${minutes}m`;

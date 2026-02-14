@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useCalculatorStore } from '@/lib/store';
 import { Menu, X } from 'lucide-react';
@@ -8,6 +9,8 @@ import { Menu, X } from 'lucide-react';
 export default function Navbar() {
   const { user, setShowAuthModal } = useCalculatorStore();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const pathname = usePathname();
+  const isHome = pathname === '/';
 
   return (
     <nav className="sticky top-0 z-40 border-b border-white/[0.04] bg-[#050505]/80 backdrop-blur-xl">
@@ -24,9 +27,10 @@ export default function Navbar() {
 
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-1">
-          <a href="#features" className="btn-ghost px-4 py-2 text-sm">Features</a>
-          <a href="#pricing" className="btn-ghost px-4 py-2 text-sm">Pricing</a>
+          <Link href={isHome ? '#features' : '/#features'} className="btn-ghost px-4 py-2 text-sm">Features</Link>
+          <Link href={isHome ? '#pricing' : '/#pricing'} className="btn-ghost px-4 py-2 text-sm">Pricing</Link>
           <Link href="/calculator" className="btn-ghost px-4 py-2 text-sm">Calculator</Link>
+          <Link href="/docs" className="btn-ghost px-4 py-2 text-sm">Docs</Link>
         </div>
 
         {/* Desktop Auth */}
@@ -69,9 +73,10 @@ export default function Navbar() {
       {/* Mobile menu */}
       {mobileOpen && (
         <div className="md:hidden border-t border-white/[0.04] bg-[#0a0a0a] px-6 py-4 space-y-2">
-          <a href="#features" onClick={() => setMobileOpen(false)} className="block py-3 text-sm text-zinc-300 hover:text-white">Features</a>
-          <a href="#pricing" onClick={() => setMobileOpen(false)} className="block py-3 text-sm text-zinc-300 hover:text-white">Pricing</a>
+          <Link href={isHome ? '#features' : '/#features'} onClick={() => setMobileOpen(false)} className="block py-3 text-sm text-zinc-300 hover:text-white">Features</Link>
+          <Link href={isHome ? '#pricing' : '/#pricing'} onClick={() => setMobileOpen(false)} className="block py-3 text-sm text-zinc-300 hover:text-white">Pricing</Link>
           <Link href="/calculator" onClick={() => setMobileOpen(false)} className="block py-3 text-sm text-zinc-300 hover:text-white">Calculator</Link>
+          <Link href="/docs" onClick={() => setMobileOpen(false)} className="block py-3 text-sm text-zinc-300 hover:text-white">Docs</Link>
           <div className="pt-3 border-t border-white/[0.04] space-y-2">
             {user ? (
               <Link href="/dashboard" className="btn-primary block text-center py-3 text-sm">Dashboard</Link>

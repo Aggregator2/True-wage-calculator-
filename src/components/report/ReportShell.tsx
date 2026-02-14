@@ -8,6 +8,7 @@ import {
   ChevronLeft,
 } from 'lucide-react';
 import Link from 'next/link';
+import ReportProgressBar, { type GenerationStage } from './ReportProgressBar';
 
 interface ReportSection {
   id: string;
@@ -23,6 +24,9 @@ interface ReportShellProps {
   onExportPDF: () => void;
   isExportingPDF: boolean;
   pdfProgress?: string;
+  generationStage?: GenerationStage;
+  isPremium?: boolean;
+  isLoading?: boolean;
 }
 
 export default function ReportShell({
@@ -33,6 +37,9 @@ export default function ReportShell({
   onExportPDF,
   isExportingPDF,
   pdfProgress,
+  generationStage,
+  isPremium = false,
+  isLoading = false,
 }: ReportShellProps) {
   const [activeSection, setActiveSection] = useState(sections[0]?.id || '');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -113,7 +120,7 @@ export default function ReportShell({
           <div className="flex items-center gap-2">
             <button
               onClick={onExportPDF}
-              disabled={isExportingPDF}
+              disabled={isExportingPDF || isLoading}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#10B981] text-[#0A1628] text-sm font-semibold hover:shadow-lg hover:shadow-[#10B981]/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isExportingPDF ? (
@@ -138,6 +145,13 @@ export default function ReportShell({
           </div>
         </div>
       </header>
+
+      {/* Generation progress bar - shown during loading */}
+      {generationStage && !generationStage.isComplete && (
+        <div className="fixed top-14 left-0 right-0 z-39">
+          <ReportProgressBar stage={generationStage} isPremium={isPremium} />
+        </div>
+      )}
 
       {/* Sidebar - Desktop */}
       <aside className={`

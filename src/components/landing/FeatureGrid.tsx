@@ -9,41 +9,49 @@ const features = [
     icon: Clock,
     title: 'True Hourly Wage',
     description: 'Your real rate after tax, commute, breaks, and hidden time costs.',
+    href: '/calculator',
   },
   {
     icon: Flame,
     title: 'FIRE Progress',
     description: 'Track your path to financial independence with milestone tracking.',
+    href: '/dashboard?tool=fire-tracker',
   },
   {
     icon: TrendingUp,
     title: 'Opportunity Cost',
     description: 'What your spending really costs when invested in the S&P 500.',
+    href: '/dashboard?tool=opportunity-cost',
   },
   {
     icon: MapPin,
     title: 'Geo-Arbitrage',
     description: 'Compare your earning power across 70+ UK and global locations.',
+    href: '/dashboard?tool=geo-arbitrage',
   },
   {
     icon: Brain,
     title: 'Stress & Burnout',
     description: 'Quantify the hidden cost of workplace stress on your true earnings.',
+    href: '/dashboard?tool=stress',
   },
   {
     icon: Home,
     title: 'WFH Savings',
     description: 'Calculate exactly how much working from home saves you.',
+    href: '/dashboard?tool=wfh',
   },
   {
     icon: Briefcase,
     title: 'Commute Impact',
     description: 'The full cost of your commute — time, money, and CO2.',
+    href: '/dashboard?tool=commute',
   },
   {
     icon: GraduationCap,
     title: 'Student Loan',
     description: 'Project repayments, write-off dates, and voluntary payment benefits.',
+    href: '/dashboard?tool=student-loan',
   },
 ];
 
@@ -66,7 +74,7 @@ export default function FeatureGrid() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {features.map((feature, i) => (
             <AnimatedEntry key={feature.title} delay={i * 50}>
-              <Link href="/calculator" className="group block">
+              <Link href={feature.href} className="group block">
                 <div className="card card-interactive p-5 h-full">
                   <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4 transition-colors group-hover:bg-emerald-500/15">
                     <feature.icon className="w-5 h-5 text-emerald-400" strokeWidth={1.5} />

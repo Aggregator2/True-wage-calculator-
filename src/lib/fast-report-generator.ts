@@ -6,6 +6,7 @@
 
 import { jsPDF } from 'jspdf';
 import type { ComprehensiveUserData, AIAnalysisResult } from './openrouter';
+import { hexToRgbTuple as hexToRgb } from './utils';
 
 // ============================================================================
 // COLOR PALETTE (Premium - inspired by financial annual reports)
@@ -37,13 +38,6 @@ export interface FastReportData {
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-function hexToRgb(hex: string): [number, number, number] {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result
-    ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
-    : [0, 0, 0];
-}
 
 /**
  * Draw a simple donut chart manually (no Chart.js delay)

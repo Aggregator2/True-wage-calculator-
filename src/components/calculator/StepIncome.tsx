@@ -1,13 +1,11 @@
 'use client';
 
 import { useCalculatorStore } from '@/lib/store';
+import { formatSalary, parseSalary } from '@/lib/utils';
 import type { TaxRegion, StudentLoanPlan } from '@/types/calculator';
 
 export default function StepIncome() {
   const { inputs, setInputs } = useCalculatorStore();
-
-  const formatSalary = (val: number) => val.toLocaleString('en-GB');
-  const parseSalary = (val: string) => parseInt(val.replace(/,/g, ''), 10) || 0;
 
   const studentLoanOptions: { value: StudentLoanPlan; label: string }[] = [
     { value: 'none', label: 'None' },

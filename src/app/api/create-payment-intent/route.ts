@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 let _stripe: Stripe | null = null;
 function getStripe(): Stripe {
@@ -9,13 +10,52 @@ function getStripe(): Stripe {
   return _stripe;
 }
 
+let _supabaseAdmin: SupabaseClient | null = null;
+function getSupabaseAdmin(): SupabaseClient {
+  if (!_supabaseAdmin) {
+    _supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    );
+  }
+  return _supabaseAdmin;
+}
+
+async function verifyUser(token: string) {
+  const supabaseAuth = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+    {
+      global: {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    }
+  );
+  const { data: { user }, error } = await supabaseAuth.auth.getUser();
+  return { user, error };
+}
+
 export async function POST(request: Request) {
   try {
-    const { lookupKey, userId, userEmail } = await request.json();
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const token = authHeader.slice(7);
+    const { user, error: authError } = await verifyUser(token);
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userId = user.id;
+    const userEmail = user.email!;
+
+    const { lookupKey } = await request.json();
 
     console.log('Creating payment intent for:', { lookupKey, userId, userEmail });
 
-    if (!lookupKey || !userId || !userEmail) {
+    if (!lookupKey) {
       return NextResponse.json(
         { error: 'Missing required parameters' },
         { status: 400 }
@@ -70,6 +110,12 @@ export async function POST(request: Request) {
       customerId = customer.id;
       console.log('Created customer:', customerId);
     }
+
+    // Save stripe_customer_id to user_profiles so webhooks can find the user
+    await getSupabaseAdmin()
+      .from('user_profiles')
+      .update({ stripe_customer_id: customerId, updated_at: new Date().toISOString() })
+      .eq('id', userId);
 
     if (isSubscription) {
       console.log('Creating subscription with SetupIntent approach...');

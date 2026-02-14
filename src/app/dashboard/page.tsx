@@ -1,35 +1,46 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useCalculatorStore, useIsPremium } from '@/lib/store';
+import { useAuthInit } from '@/hooks/useAuthInit';
 import { supabase } from '@/lib/supabase';
 import { getSavedScenarios, deleteScenario, getAllScenarios, deleteMultiScenario, calculatorTypeLabels, type MultiScenario } from '@/lib/scenarios';
 import { getProgressHistory } from '@/lib/progress';
 import { formatCurrency } from '@/lib/calculator';
 import type { SavedScenario, ProgressSnapshot } from '@/lib/supabase';
+import dynamic from 'next/dynamic';
 import DashboardSidebar from '@/components/dashboard/DashboardSidebar';
 import AuthModal from '@/components/AuthModal';
 import PremiumModal from '@/components/PremiumModal';
-import FireProgress from '@/components/FireProgress';
-import CommuteCalculator from '@/components/CommuteCalculator';
-import GeoArbitrageCalculator from '@/components/GeoArbitrageCalculator';
-import WFHCalculator from '@/components/WFHCalculator';
-import PensionCalculator from '@/components/PensionCalculator';
-import StudentLoanCalculator from '@/components/StudentLoanCalculator';
-import CarCalculator from '@/components/CarCalculator';
-import CarersCalculator from '@/components/CarersCalculator';
-import StressCalculator from '@/components/StressCalculator';
-import ProductExplorer from '@/components/ProductExplorer';
-import OpportunityCostCalculator from '@/components/OpportunityCostCalculator';
+const FireProgress = dynamic(() => import('@/components/FireProgress'), { ssr: false });
+const CommuteCalculator = dynamic(() => import('@/components/CommuteCalculator'), { ssr: false });
+const GeoArbitrageCalculator = dynamic(() => import('@/components/GeoArbitrageCalculator'), { ssr: false });
+const WFHCalculator = dynamic(() => import('@/components/WFHCalculator'), { ssr: false });
+const PensionCalculator = dynamic(() => import('@/components/PensionCalculator'), { ssr: false });
+const StudentLoanCalculator = dynamic(() => import('@/components/StudentLoanCalculator'), { ssr: false });
+const CarCalculator = dynamic(() => import('@/components/CarCalculator'), { ssr: false });
+const CarersCalculator = dynamic(() => import('@/components/CarersCalculator'), { ssr: false });
+const StressCalculator = dynamic(() => import('@/components/StressCalculator'), { ssr: false });
+const ProductExplorer = dynamic(() => import('@/components/ProductExplorer'), { ssr: false });
+const OpportunityCostCalculator = dynamic(() => import('@/components/OpportunityCostCalculator'), { ssr: false });
 import {
-  Plus, FileText, Download, Trash2, BarChart3, TrendingUp, Bookmark, Calendar,
+  Plus, FileText, Trash2, BarChart3, TrendingUp, Bookmark, Calendar,
   Car, GraduationCap, HeartHandshake, Briefcase, Globe, Home, Gauge, ShoppingCart,
   PiggyBank, LineChart, Brain, ArrowRight, Lock, User, CreditCard, Bell
 } from 'lucide-react';
 
 export default function Dashboard() {
-  const { user, setUser, setShowAuthModal, setShowPremiumModal, setSubscriptionStatus, subscriptionStatus } = useCalculatorStore();
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#050505]" />}>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
+function DashboardContent() {
+  const { user, setShowAuthModal, setShowPremiumModal, subscriptionStatus, setSubscriptionStatus } = useCalculatorStore();
   const isPremium = useIsPremium();
   const [scenarios, setScenarios] = useState<SavedScenario[]>([]);
   const [primaryScenario, setPrimaryScenario] = useState<MultiScenario | null>(null);
@@ -37,47 +48,34 @@ export default function Dashboard() {
   const [progressHistory, setProgressHistory] = useState<ProgressSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [generatingReport, setGeneratingReport] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeView, setActiveView] = useState('overview');
+  const [restoringPurchase, setRestoringPurchase] = useState(false);
+  const [expandedTool, setExpandedTool] = useState<string | null>(null);
 
-  // Auth init
+  const searchParams = useSearchParams();
+
+  useAuthInit();
+
+  // Handle ?tool= query parameter to deep-link into a specific tool
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user);
-        fetchSubscriptionStatus(session.user.id);
+    const toolParam = searchParams.get('tool');
+    if (toolParam) {
+      if (toolParam === 'fire-tracker') {
+        setActiveView('fire');
       } else {
-        setShowAuthModal(true, 'sign_in');
+        setActiveView('tools');
+        setExpandedTool(toolParam);
       }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
-      if (session?.user) {
-        fetchSubscriptionStatus(session.user.id);
-      } else {
-        setSubscriptionStatus(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const fetchSubscriptionStatus = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('subscription_status')
-        .eq('id', userId)
-        .single();
-      if (!error && data) setSubscriptionStatus(data.subscription_status || 'free');
-      else setSubscriptionStatus('free');
-    } catch { setSubscriptionStatus('free'); }
-  };
+    }
+  }, [searchParams]);
 
   useEffect(() => {
-    if (user) loadData();
+    if (!user) {
+      setShowAuthModal(true, 'sign_in');
+    } else {
+      loadData();
+    }
   }, [user]);
 
   const loadData = async () => {
@@ -126,55 +124,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleGenerateReport = async (format: 'pdf' | 'json' = 'pdf') => {
-    if (!user) return;
-    if (!primaryScenario && scenarios.length === 0) {
-      alert('Please complete the main calculator first to generate a report.');
-      return;
-    }
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) { setShowAuthModal(true, 'sign_in'); return; }
-      setGeneratingReport(true);
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000);
-      const response = await fetch('/api/generate-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({
-          format,
-          scenarioData: primaryScenario ? { primary: primaryScenario, comparisons: comparisonScenarios } : null,
-          legacyScenarios: scenarios,
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to generate report');
-      }
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = format === 'pdf'
-        ? `truewage-fire-report-${new Date().toISOString().split('T')[0]}.pdf`
-        : `truewage-report-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Report generation error:', error);
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        alert('Report generation timed out. Please try again.');
-      } else {
-        alert(error instanceof Error ? error.message : 'Failed to generate report.');
-      }
-    } finally {
-      setGeneratingReport(false);
-    }
-  };
 
   // Not logged in
   if (!user) {
@@ -291,8 +240,6 @@ export default function Dashboard() {
     },
   ];
 
-  const [expandedTool, setExpandedTool] = useState<string | null>(null);
-
   // View-specific content rendering
   const renderOverview = () => (
     <div className="space-y-6">
@@ -362,18 +309,6 @@ export default function Dashboard() {
               <BarChart3 className="w-4 h-4" />
               View Report
             </a>
-            <button
-              onClick={() => handleGenerateReport('pdf')}
-              disabled={!primaryScenario || generatingReport}
-              className="btn-secondary px-4 py-2.5 text-sm inline-flex items-center gap-1.5 disabled:opacity-40"
-            >
-              {generatingReport ? (
-                <div className="w-3.5 h-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Download className="w-3.5 h-3.5" />
-              )}
-              PDF
-            </button>
           </div>
         </div>
       </div>
@@ -904,13 +839,46 @@ export default function Dashboard() {
               <p className="text-xs text-zinc-500 mb-3">
                 Upgrade to Premium for unlimited scenarios, AI-powered reports, and all calculator tools.
               </p>
-              <button
-                onClick={() => setShowPremiumModal(true)}
-                className="btn-primary px-5 py-2.5 text-sm font-semibold inline-flex items-center gap-2"
-              >
-                <Lock className="w-3.5 h-3.5" />
-                Upgrade to Premium
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowPremiumModal(true)}
+                  className="btn-primary px-5 py-2.5 text-sm font-semibold inline-flex items-center gap-2"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  Upgrade to Premium
+                </button>
+                <button
+                  disabled={restoringPurchase}
+                  onClick={async () => {
+                    setRestoringPurchase(true);
+                    try {
+                      const { data: { session } } = await supabase.auth.getSession();
+                      if (!session?.access_token) return;
+                      const res = await fetch('/api/verify-payment', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          Authorization: `Bearer ${session.access_token}`,
+                        },
+                      });
+                      const result = await res.json();
+                      if (result.status === 'premium' || result.status === 'lifetime') {
+                        setSubscriptionStatus(result.status);
+                      } else {
+                        alert('No active purchase found. If you recently paid, please wait a moment and try again.');
+                      }
+                    } catch {
+                      alert('Could not verify purchase. Please try again.');
+                    } finally {
+                      setRestoringPurchase(false);
+                    }
+                  }}
+                  className="px-4 py-2.5 text-sm text-zinc-400 hover:text-white border border-zinc-700 hover:border-zinc-500 rounded-lg transition-all inline-flex items-center gap-2 disabled:opacity-50"
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  {restoringPurchase ? 'Checking...' : 'Restore Purchase'}
+                </button>
+              </div>
             </div>
           )}
           {isPremium && subscriptionStatus !== 'lifetime' && (

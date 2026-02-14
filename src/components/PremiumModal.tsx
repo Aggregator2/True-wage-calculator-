@@ -472,13 +472,15 @@ export default function PremiumModal() {
     setError(null);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const response = await fetch('/api/create-payment-intent', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
         body: JSON.stringify({
           lookupKey: plans[selectedPlan].lookupKey,
-          userId: user.id,
-          userEmail: user.email,
         }),
       });
 
@@ -504,11 +506,33 @@ export default function PremiumModal() {
     setError(null);
   };
 
-  const handleSuccess = () => {
+  const handleSuccess = async () => {
     setPaymentSuccess(true);
 
-    // Poll Supabase for updated subscription status
-    // The webhook may take a moment to update the database
+    if (!user) return;
+
+    // Call verify-payment IMMEDIATELY — this checks Stripe directly and
+    // upgrades the user's DB profile without waiting for webhooks
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/verify-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+      });
+      const result = await res.json();
+      if (result.status === 'premium' || result.status === 'lifetime') {
+        setSubscriptionStatus(result.status);
+        return;
+      }
+    } catch {
+      // fall through to polling
+    }
+
+    // Fallback: poll Supabase in case verify-payment didn't find it yet
+    // (e.g. Stripe subscription still activating)
     const pollSubscription = async (attempts = 0) => {
       if (!user || attempts >= 10) return;
 
@@ -527,8 +551,7 @@ export default function PremiumModal() {
         // ignore
       }
 
-      // Retry after 1.5 seconds
-      setTimeout(() => pollSubscription(attempts + 1), 1500);
+      setTimeout(() => pollSubscription(attempts + 1), 2000);
     };
 
     pollSubscription();

@@ -1,3 +1,5 @@
+// NOTE: A viewport-triggered variant exists at @/components/report/CountUpNumber
+// That version animates on scroll into view; this version animates on value change.
 'use client';
 
 import { useEffect, useRef, useState } from 'react';

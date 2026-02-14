@@ -76,6 +76,12 @@ export default function StressCalculator() {
 
   const formatCurrency = (value: number) => `£${value.toLocaleString()}`;
 
+  const textColorMap: Record<string, string> = {
+    red: 'text-red-400',
+    orange: 'text-orange-400',
+    yellow: 'text-yellow-400',
+  };
+
   const getRiskColor = (risk: string) => {
     switch (risk) {
       case 'low': return 'text-green-400';
@@ -387,7 +393,7 @@ export default function StressCalculator() {
                 ].map(item => (
                   <div key={item.label} className="flex justify-between items-center">
                     <span className="text-sm text-neutral-400">{item.label}</span>
-                    <span className={`text-sm font-medium text-${item.color}-400`}>
+                    <span className={`text-sm font-medium ${textColorMap[item.color] || 'text-neutral-400'}`}>
                       -{formatCurrency(item.value)}/yr
                     </span>
                   </div>

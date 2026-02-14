@@ -31,6 +31,14 @@ export default function Newsletter() {
         }
       } else {
         setStatus('success');
+        localStorage.setItem('email-subscribed', 'true');
+
+        // Send welcome email (fire-and-forget)
+        fetch('/api/send-welcome-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim().toLowerCase() }),
+        }).catch(console.error);
       }
       setEmail('');
     } catch {

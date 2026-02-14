@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useCalculatorStore } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import { getAllScenarios } from '@/lib/scenarios';
@@ -12,6 +12,7 @@ import {
 
 import ReportLoader from '@/components/report/ReportLoader';
 import ReportShell from '@/components/report/ReportShell';
+import type { GenerationStage } from '@/components/report/ReportProgressBar';
 import HeroSection from '@/components/report/HeroSection';
 import ScoreDashboard from '@/components/report/ScoreDashboard';
 import IncomeSection from '@/components/report/IncomeSection';
@@ -24,6 +25,7 @@ import AIContentSection from '@/components/report/AIContentSection';
 import PaywallOverlay from '@/components/report/PaywallOverlay';
 import AuthModal from '@/components/AuthModal';
 import PremiumModal from '@/components/PremiumModal';
+import { useAuthInit } from '@/hooks/useAuthInit';
 
 import {
   calculateFinancialHealthScore,
@@ -50,9 +52,58 @@ interface ReportData {
   isPremium: boolean;
 }
 
+type LoadingPhase = 'init' | 'fetching' | 'stage1' | 'stage2_3' | 'stage4' | 'complete' | 'error';
+
+const STAGE_LABELS: Record<LoadingPhase, string> = {
+  init: 'Preparing...',
+  fetching: 'Loading your data...',
+  stage1: 'Analyzing your finances...',
+  stage2_3: 'Finding optimizations & assessing risks...',
+  stage4: 'Building your roadmap...',
+  complete: 'Report ready!',
+  error: 'Something went wrong',
+};
+
+const STAGE_PROGRESS: Record<LoadingPhase, number> = {
+  init: 5,
+  fetching: 10,
+  stage1: 35,
+  stage2_3: 60,
+  stage4: 85,
+  complete: 100,
+  error: 0,
+};
+
+// Wrapper for gated sections (defined outside page component to avoid remounts)
+function GatedSection({
+  id,
+  isPremium,
+  sectionLabel,
+  children,
+}: {
+  id: string;
+  isPremium: boolean;
+  sectionLabel: string;
+  children: React.ReactNode;
+}) {
+  const locked = isSectionLocked(id, isPremium);
+  return (
+    <div id={id} className="relative scroll-mt-20">
+      {locked && (
+        <PaywallOverlay sectionTitle={sectionLabel} />
+      )}
+      <div className={locked ? 'pointer-events-none select-none' : ''}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export default function ReportPage() {
-  const { user, setShowAuthModal, setShowPremiumModal } = useCalculatorStore();
+  const { user, setShowAuthModal, setShowPremiumModal, subscriptionStatus } = useCalculatorStore();
+  useAuthInit();
   const [loading, setLoading] = useState(true);
+  const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('init');
   const [error, setError] = useState<string | null>(null);
   const [reportData, setReportData] = useState<ReportData | null>(null);
 
@@ -65,6 +116,16 @@ export default function ReportPage() {
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [pdfProgress, setPdfProgress] = useState('');
 
+  // Prevent double-generation
+  const hasStarted = useRef(false);
+
+  // Progress bar stage
+  const generationStage: GenerationStage = {
+    label: STAGE_LABELS[loadingPhase],
+    progress: STAGE_PROGRESS[loadingPhase],
+    isComplete: loadingPhase === 'complete',
+  };
+
   // Generate report on mount
   useEffect(() => {
     if (!user) {
@@ -72,11 +133,14 @@ export default function ReportPage() {
       setLoading(false);
       return;
     }
+    if (hasStarted.current) return;
+    hasStarted.current = true;
     generateReport();
   }, [user]);
 
   const generateReport = async () => {
     setLoading(true);
+    setLoadingPhase('fetching');
     setError(null);
 
     try {
@@ -88,6 +152,8 @@ export default function ReportPage() {
 
       // Fetch scenario data
       const multiScenarios = await getAllScenarios(user!.id);
+
+      setLoadingPhase('stage1');
 
       const response = await fetch('/api/generate-report/interactive', {
         method: 'POST',
@@ -112,18 +178,111 @@ export default function ReportPage() {
         throw new Error(err.error || 'Failed to generate report');
       }
 
-      const data: ReportData = await response.json();
-      setReportData(data);
+      const contentType = response.headers.get('content-type') || '';
 
-      // Initialize interactive state
-      setRecommendations(extractRecommendations(data.aiAnalysis));
-      const timeline = extractTimeline(data.aiAnalysis);
-      setTimelinePhases(timeline.phases);
-      const projections = extractProjections(data.userData, data.aiAnalysis);
-      setProjectionScenarios(projections.scenarios);
+      // =====================================================================
+      // NDJSON STREAMING PATH (Premium users)
+      // =====================================================================
+      if (contentType.includes('ndjson')) {
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('No response body');
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let streamedData: ReportData = {
+          userData: null as any,
+          aiAnalysis: {
+            profileSynthesis: null,
+            optimizationAnalysis: null,
+            riskAssessment: null,
+            roadmap: null,
+          },
+          generatedAt: '',
+          userName: '',
+          isPremium: true,
+        };
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const chunk = JSON.parse(line);
+
+              if (chunk.type === 'computed') {
+                streamedData.userData = chunk.userData;
+                streamedData.generatedAt = chunk.generatedAt;
+                streamedData.userName = chunk.userName;
+                streamedData.isPremium = chunk.isPremium;
+              } else if (chunk.type === 'ai_stage') {
+                if (chunk.stage === 'profileSynthesis') {
+                  streamedData.aiAnalysis.profileSynthesis = chunk.data;
+                  setLoadingPhase('stage2_3');
+                } else if (chunk.stage === 'optimizationAnalysis') {
+                  streamedData.aiAnalysis.optimizationAnalysis = chunk.data;
+                } else if (chunk.stage === 'riskAssessment') {
+                  streamedData.aiAnalysis.riskAssessment = chunk.data;
+                  setLoadingPhase('stage4');
+                } else if (chunk.stage === 'roadmap') {
+                  streamedData.aiAnalysis.roadmap = chunk.data;
+                }
+              } else if (chunk.type === 'complete') {
+                // All done
+              } else if (chunk.type === 'error') {
+                throw new Error(chunk.message || 'Streaming error');
+              }
+            } catch (e) {
+              if (e instanceof Error && e.message.includes('Streaming error')) throw e;
+              console.error('Failed to parse NDJSON chunk:', e);
+            }
+          }
+        }
+
+        // Process remaining buffer
+        if (buffer.trim()) {
+          try {
+            const chunk = JSON.parse(buffer);
+            if (chunk.type === 'ai_stage' && chunk.stage === 'roadmap') {
+              streamedData.aiAnalysis.roadmap = chunk.data;
+            }
+          } catch (e) {
+            console.error('Failed to parse final NDJSON chunk:', e);
+          }
+        }
+
+        setReportData(streamedData);
+        setRecommendations(extractRecommendations(streamedData.aiAnalysis));
+        const timeline = extractTimeline(streamedData.aiAnalysis);
+        setTimelinePhases(timeline.phases);
+        const projections = extractProjections(streamedData.userData, streamedData.aiAnalysis);
+        setProjectionScenarios(projections.scenarios);
+      }
+      // =====================================================================
+      // JSON PATH (Free users - fast)
+      // =====================================================================
+      else {
+        const data: ReportData = await response.json();
+        setReportData(data);
+
+        // Initialize interactive state
+        setRecommendations(extractRecommendations(data.aiAnalysis));
+        const timeline = extractTimeline(data.aiAnalysis);
+        setTimelinePhases(timeline.phases);
+        const projections = extractProjections(data.userData, data.aiAnalysis);
+        setProjectionScenarios(projections.scenarios);
+      }
+
+      setLoadingPhase('complete');
     } catch (err) {
       console.error('Report generation error:', err);
       setError(err instanceof Error ? err.message : 'Failed to generate report');
+      setLoadingPhase('error');
     } finally {
       setLoading(false);
     }
@@ -173,22 +332,56 @@ export default function ReportPage() {
 
       setPdfProgress('Rendering pages...');
 
-      // Temporarily make content full width for PDF
-      const mainEl = document.querySelector('main');
-      const originalPadding = mainEl?.style.paddingLeft;
-      if (mainEl) mainEl.style.paddingLeft = '0';
+      // Temporarily pause CSS animations only (not transforms/opacity which affect layout)
+      const style = document.createElement('style');
+      style.id = 'pdf-export-overrides';
+      style.textContent = `
+        *, *::before, *::after {
+          animation-play-state: paused !important;
+          transition: none !important;
+        }
+      `;
+      document.head.appendChild(style);
+
+      // Scroll to top so html2canvas captures from the start
+      window.scrollTo(0, 0);
+      await new Promise(r => setTimeout(r, 200));
 
       const canvas = await html2canvas(reportContent, {
-        scale: 2,
+        scale: 1.5,
         useCORS: true,
+        allowTaint: true,
         backgroundColor: '#050505',
-        width: 1200,
-        windowWidth: 1200,
+        logging: false,
+        imageTimeout: 10000,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: reportContent.scrollWidth,
+        windowHeight: reportContent.scrollHeight,
+        onclone: (clonedDoc) => {
+          // Ensure the cloned element is fully visible and unstyled for capture
+          const clonedContent = clonedDoc.getElementById('report-content');
+          if (clonedContent) {
+            clonedContent.style.overflow = 'visible';
+            clonedContent.style.height = 'auto';
+          }
+          // Remove any fixed/sticky positioned elements in the clone (header, sidebar)
+          clonedDoc.querySelectorAll('[class*="fixed"], [class*="sticky"]').forEach(el => {
+            (el as HTMLElement).style.position = 'static';
+          });
+        },
       });
 
-      if (mainEl) mainEl.style.paddingLeft = originalPadding || '';
+      // Remove override styles
+      document.getElementById('pdf-export-overrides')?.remove();
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      if (canvas.width === 0 || canvas.height === 0) {
+        throw new Error('Canvas rendered with zero dimensions');
+      }
+
+      setPdfProgress('Building PDF...');
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.9);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pageWidth = 210;
       const pageHeight = 297;
@@ -201,13 +394,13 @@ export default function ReportPage() {
       const totalPages = Math.ceil(imgHeight / pageHeight);
 
       // First page
-      setPdfProgress(`Rendering page ${page} of ${totalPages}...`);
+      setPdfProgress(`Building page ${page} of ${totalPages}...`);
       pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
 
       while (heightLeft > 0) {
         page++;
-        setPdfProgress(`Rendering page ${page} of ${totalPages}...`);
+        setPdfProgress(`Building page ${page} of ${totalPages}...`);
         position = -(pageHeight * (page - 1));
         pdf.addPage();
         pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
@@ -218,20 +411,70 @@ export default function ReportPage() {
       pdf.save(`TrueWage-FIRE-Report-${date}.pdf`);
     } catch (err) {
       console.error('PDF export error:', err);
-      alert('Failed to export PDF. Please try again.');
+      // Remove override styles on error too
+      document.getElementById('pdf-export-overrides')?.remove();
+      // Fallback: offer browser print dialog
+      const usePrint = confirm(
+        'PDF export encountered an issue. Would you like to use the browser\'s Print dialog instead?\n\nTip: Select "Save as PDF" as the destination.'
+      );
+      if (usePrint) {
+        window.print();
+      }
     } finally {
       setIsExportingPDF(false);
       setPdfProgress('');
     }
   };
 
-  // Loading state
+  // Loading state — orb + progress bar, no fullscreen page takeover
   if (loading) {
     return (
-      <>
-        <ReportLoader />
+      <div className="min-h-screen bg-[#050505] animate-fadeIn">
+        {/* Minimal header */}
+        <header className="fixed top-0 left-0 right-0 z-40 bg-[#0A1628]/90 backdrop-blur-xl border-b border-white/[0.06]">
+          <div className="flex items-center justify-between px-4 h-14">
+            <div className="flex items-center gap-3">
+              <a href="/dashboard" className="p-2 rounded-lg text-[#94A3B8] hover:text-white hover:bg-white/[0.06] transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+              </a>
+              <div>
+                <h1 className="text-sm font-semibold text-white leading-tight">TrueWage FIRE Report</h1>
+                <p className="text-xs text-[#64748B]">Generating your report</p>
+              </div>
+            </div>
+            <span className="text-xs text-[#64748B] tabular-nums font-medium">{Math.round(generationStage.progress)}%</span>
+          </div>
+
+          {/* Progress bar — flush at the bottom of the header */}
+          <div className="relative h-[2px] bg-white/[0.04] overflow-hidden">
+            <div
+              className="absolute inset-y-0 left-0 transition-all duration-1000 ease-out"
+              style={{
+                width: `${generationStage.progress}%`,
+                background: 'linear-gradient(90deg, #10B981, #34D399, #10B981)',
+                boxShadow: '0 0 12px rgba(16,185,129,0.5), 0 0 4px rgba(16,185,129,0.3)',
+              }}
+            />
+          </div>
+        </header>
+
+        {/* Centered orb + stage text */}
+        <div className="flex items-center justify-center" style={{ minHeight: '100vh' }}>
+          <ReportLoader size={140} text={STAGE_LABELS[loadingPhase]} inline />
+        </div>
+
         <AuthModal />
-      </>
+
+        <style>{`
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+          .animate-fadeIn {
+            animation: fadeIn 0.5s ease-out forwards;
+          }
+        `}</style>
+      </div>
     );
   }
 
@@ -248,7 +491,7 @@ export default function ReportPage() {
           </h2>
           <p className="text-neutral-400 mb-6">{error || 'Something went wrong. Please try again.'}</p>
           <div className="flex gap-3 justify-center">
-            <button onClick={generateReport} className="btn-primary px-6 py-3">
+            <button onClick={() => { hasStarted.current = false; generateReport(); }} className="btn-primary px-6 py-3">
               Try Again
             </button>
             <a href="/dashboard" className="btn-secondary px-6 py-3">
@@ -262,8 +505,9 @@ export default function ReportPage() {
     );
   }
 
-  // Extract all section data
-  const { userData, aiAnalysis, isPremium, generatedAt, userName } = reportData;
+  // Extract all section data — use live store status OR the API response
+  const { userData, aiAnalysis, isPremium: apiIsPremium, generatedAt, userName } = reportData;
+  const isPremium = (subscriptionStatus === 'premium' || subscriptionStatus === 'lifetime') || apiIsPremium;
   const heroData = extractHeroData(userData, aiAnalysis);
   const incomeProps = extractIncomeProps(userData, aiAnalysis);
   const savingsProps = extractSavingsProps(userData, aiAnalysis);
@@ -298,21 +542,6 @@ export default function ReportPage() {
     })),
   ];
 
-  // Wrapper for gated sections
-  const GatedSection = ({ id, children }: { id: string; children: React.ReactNode }) => {
-    const locked = isSectionLocked(id, isPremium);
-    return (
-      <div id={id} className="relative scroll-mt-20">
-        {locked && (
-          <PaywallOverlay sectionTitle={sections.find(s => s.id === id)?.label || 'This Section'} />
-        )}
-        <div className={locked ? 'pointer-events-none select-none' : ''}>
-          {children}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <>
       <ReportShell
@@ -339,28 +568,28 @@ export default function ReportPage() {
           </div>
 
           {/* Income - partially visible for free */}
-          <GatedSection id="income">
+          <GatedSection id="income" isPremium={isPremium} sectionLabel="Income Reality">
             <div className="px-6 py-16">
               <IncomeSection {...incomeProps} />
             </div>
           </GatedSection>
 
           {/* Savings - premium */}
-          <GatedSection id="savings">
+          <GatedSection id="savings" isPremium={isPremium} sectionLabel="Savings Rate">
             <div className="px-6 py-16">
               <SavingsSection {...savingsProps} />
             </div>
           </GatedSection>
 
           {/* Spending - premium */}
-          <GatedSection id="spending">
+          <GatedSection id="spending" isPremium={isPremium} sectionLabel="Spending Analysis">
             <div className="px-6 py-16">
               <SpendingSection {...spendingProps} />
             </div>
           </GatedSection>
 
           {/* Recommendations - premium */}
-          <GatedSection id="recommendations">
+          <GatedSection id="recommendations" isPremium={isPremium} sectionLabel="Recommendations">
             <div className="px-6 py-16">
               <RecommendationsSection
                 recommendations={recommendations}
@@ -370,7 +599,7 @@ export default function ReportPage() {
           </GatedSection>
 
           {/* Timeline - premium */}
-          <GatedSection id="timeline">
+          <GatedSection id="timeline" isPremium={isPremium} sectionLabel="Action Plan">
             <div className="px-6 py-16">
               <ActionTimeline
                 phases={timelinePhases}
@@ -381,7 +610,7 @@ export default function ReportPage() {
           </GatedSection>
 
           {/* Projections - premium */}
-          <GatedSection id="projections">
+          <GatedSection id="projections" isPremium={isPremium} sectionLabel="FIRE Projection">
             <div className="px-6 py-16">
               <ProjectionSection
                 scenarios={projectionScenarios}
@@ -396,7 +625,12 @@ export default function ReportPage() {
 
           {/* Dynamic AI sections */}
           {aiSections.map(section => (
-            <GatedSection key={section.id} id={section.id}>
+            <GatedSection
+              key={section.id}
+              id={section.id}
+              isPremium={isPremium}
+              sectionLabel={section.title.length > 20 ? section.title.slice(0, 20) + '...' : section.title}
+            >
               <div className="px-6 py-16">
                 <AIContentSection
                   id={section.id}

@@ -3,10 +3,13 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { useCalculatorStore } from '@/lib/store';
+import { supabase } from '@/lib/supabase';
 
 function PaymentSuccessContent() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const { setSubscriptionStatus } = useCalculatorStore();
 
   useEffect(() => {
     const paymentIntent = searchParams.get('payment_intent');
@@ -14,10 +17,47 @@ function PaymentSuccessContent() {
 
     if (redirectStatus === 'succeeded' || paymentIntent) {
       setStatus('success');
+
+      // Try to refresh subscription status, falling back to verify-payment endpoint
+      const refreshStatus = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) return;
+
+        // First check the DB (webhook may have already updated)
+        const { data } = await supabase
+          .from('user_profiles')
+          .select('subscription_status')
+          .eq('id', session.user.id)
+          .single();
+
+        if (data && (data.subscription_status === 'premium' || data.subscription_status === 'lifetime')) {
+          setSubscriptionStatus(data.subscription_status);
+          return;
+        }
+
+        // Webhook hasn't arrived yet — call verify-payment to check Stripe directly
+        try {
+          const res = await fetch('/api/verify-payment', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          });
+          const result = await res.json();
+          if (result.status === 'premium' || result.status === 'lifetime') {
+            setSubscriptionStatus(result.status);
+          }
+        } catch {
+          // ignore - webhook will eventually update
+        }
+      };
+
+      refreshStatus();
     } else {
       setStatus('error');
     }
-  }, [searchParams]);
+  }, [searchParams, setSubscriptionStatus]);
 
   return (
     <div className="card card-glow max-w-md w-full p-8 text-center">

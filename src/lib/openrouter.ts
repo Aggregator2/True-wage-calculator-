@@ -84,7 +84,12 @@ IMPORTANT: You must respond with valid JSON only. No markdown, no code blocks, j
     cleanedResponse = cleanedResponse.slice(0, -3);
   }
 
-  return JSON.parse(cleanedResponse.trim()) as T;
+  try {
+    return JSON.parse(cleanedResponse.trim()) as T;
+  } catch (e) {
+    console.error('Failed to parse AI response as JSON:', e, '\nRaw response:', cleanedResponse.slice(0, 500));
+    throw new Error('AI returned invalid JSON. Please try again.');
+  }
 }
 
 // ============================================================================
@@ -1227,8 +1232,33 @@ export interface AIAnalysisResult {
   roadmap: any;
 }
 
+// Export stage prompt getters for streaming from the API route
+export { getStage1Prompt, getStage2Prompt, getStage3Prompt, getStage4Prompt };
+
 /**
- * Generate comprehensive AI analysis using multi-stage pipeline
+ * Generate FREE user AI analysis - Stage 1 only (Haiku, ~2-3s)
+ * Returns profile synthesis + empty stubs for paywalled stages
+ */
+export async function generateFreeAIAnalysis(userData: ComprehensiveUserData): Promise<AIAnalysisResult> {
+  console.log('Free user: Running Stage 1 only (Haiku - fast)...');
+  const stage1Prompt = getStage1Prompt(userData);
+  const profileSynthesis = await generateJSON(
+    stage1Prompt.prompt,
+    stage1Prompt.system,
+    'FAST'
+  );
+  console.log('Free profile synthesis complete');
+
+  return {
+    profileSynthesis,
+    optimizationAnalysis: { quickWins: [], strategicMoves: [], contrarianInsights: [], crossSystemOpportunities: [], topRecommendation: null },
+    riskAssessment: { highPriorityRisks: [], mediumPriorityRisks: [], overallRiskRating: 'N/A', emergencyFundStatus: null, scenarioAnalysis: null },
+    roadmap: { roadmap: {}, milestones: [], fiTimeline: null, criticalPath: [], personalizedMotivation: '', finalComparison: null },
+  };
+}
+
+/**
+ * Generate comprehensive AI analysis using multi-stage pipeline (Premium users)
  */
 export async function generateAIAnalysis(userData: ComprehensiveUserData): Promise<AIAnalysisResult> {
   console.log('🤖 Stage 1: Financial Profile Synthesis (Sonnet - fast)...');

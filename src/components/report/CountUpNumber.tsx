@@ -1,3 +1,5 @@
+// NOTE: A value-change variant exists at @/components/ui/CountUpNumber
+// That version re-animates when `value` changes; this version animates once on scroll into view.
 'use client';
 
 import { useEffect, useRef, useState } from 'react';

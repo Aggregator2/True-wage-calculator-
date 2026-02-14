@@ -21,6 +21,7 @@ export default function LandingFooter() {
             <Link href="/calculator" className="text-zinc-400 hover:text-white transition-colors">Calculator</Link>
             <Link href="/dashboard" className="text-zinc-400 hover:text-white transition-colors">Dashboard</Link>
             <a href="#pricing" className="text-zinc-400 hover:text-white transition-colors">Pricing</a>
+            <Link href="/docs" className="text-zinc-400 hover:text-white transition-colors">Docs</Link>
             <a href="#features" className="text-zinc-400 hover:text-white transition-colors">Features</a>
           </div>
         </div>
@@ -30,8 +31,8 @@ export default function LandingFooter() {
             &copy; {new Date().getFullYear()} TrueWage. All rights reserved.
           </p>
           <div className="flex gap-6 text-xs text-zinc-600">
-            <span className="hover:text-zinc-400 cursor-pointer transition-colors">Privacy Policy</span>
-            <span className="hover:text-zinc-400 cursor-pointer transition-colors">Terms of Service</span>
+            <Link href="/privacy" className="hover:text-zinc-400 transition-colors">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-zinc-400 transition-colors">Terms of Service</Link>
           </div>
         </div>
       </div>

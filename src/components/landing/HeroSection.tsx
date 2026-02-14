@@ -12,7 +12,7 @@ export default function HeroSection() {
       primaryCtaHref="/calculator"
       secondaryCta="See a Sample Report"
       secondaryCtaHref="/report"
-      socialProof="Join 2,400+ UK workers who discovered their true hourly rate"
+      socialProof="Discover what you really earn per hour after all costs"
     />
   );
 }

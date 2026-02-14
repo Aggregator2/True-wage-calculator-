@@ -1,67 +1,37 @@
 'use client';
 
 import { useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useCalculatorStore } from '@/lib/store';
-import { supabase } from '@/lib/supabase';
+import { useAuthInit } from '@/hooks/useAuthInit';
 import { decodeInputsFromUrl } from '@/lib/calculator';
 import Navbar from '@/components/landing/Navbar';
 import StepWizard from '@/components/calculator/StepWizard';
-import ProductExplorer from '@/components/ProductExplorer';
-import OpportunityCostCalculator from '@/components/OpportunityCostCalculator';
-import FireProgress from '@/components/FireProgress';
-import CommuteCalculator from '@/components/CommuteCalculator';
-import GeoArbitrageCalculator from '@/components/GeoArbitrageCalculator';
-import PensionCalculator from '@/components/PensionCalculator';
-import CarersCalculator from '@/components/CarersCalculator';
-import CarCalculator from '@/components/CarCalculator';
-import StudentLoanCalculator from '@/components/StudentLoanCalculator';
-import WFHCalculator from '@/components/WFHCalculator';
-import StressCalculator from '@/components/StressCalculator';
+const ProductExplorer = dynamic(() => import('@/components/ProductExplorer'), { ssr: false });
+const OpportunityCostCalculator = dynamic(() => import('@/components/OpportunityCostCalculator'), { ssr: false });
+const FireProgress = dynamic(() => import('@/components/FireProgress'), { ssr: false });
+const CommuteCalculator = dynamic(() => import('@/components/CommuteCalculator'), { ssr: false });
+const GeoArbitrageCalculator = dynamic(() => import('@/components/GeoArbitrageCalculator'), { ssr: false });
+const PensionCalculator = dynamic(() => import('@/components/PensionCalculator'), { ssr: false });
+const CarersCalculator = dynamic(() => import('@/components/CarersCalculator'), { ssr: false });
+const CarCalculator = dynamic(() => import('@/components/CarCalculator'), { ssr: false });
+const StudentLoanCalculator = dynamic(() => import('@/components/StudentLoanCalculator'), { ssr: false });
+const WFHCalculator = dynamic(() => import('@/components/WFHCalculator'), { ssr: false });
+const StressCalculator = dynamic(() => import('@/components/StressCalculator'), { ssr: false });
 import ShareSection from '@/components/ShareSection';
 import Methodology from '@/components/Methodology';
 import LandingFooter from '@/components/landing/LandingFooter';
 import AuthModal from '@/components/AuthModal';
 import PremiumModal from '@/components/PremiumModal';
+import EmailBanner from '@/components/EmailBanner';
 
 export default function CalculatorPage() {
-  const { setUser, setInputs, setSubscriptionStatus, results } = useCalculatorStore();
+  const { setInputs, results } = useCalculatorStore();
 
-  const fetchSubscriptionStatus = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('subscription_status')
-        .eq('id', userId)
-        .single();
+  useAuthInit();
 
-      if (!error && data) {
-        setSubscriptionStatus(data.subscription_status || 'free');
-      } else {
-        setSubscriptionStatus('free');
-      }
-    } catch {
-      setSubscriptionStatus('free');
-    }
-  };
-
+  // Check for shared URL parameters
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user);
-        fetchSubscriptionStatus(session.user.id);
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
-      if (session?.user) {
-        fetchSubscriptionStatus(session.user.id);
-      } else {
-        setSubscriptionStatus(null);
-      }
-    });
-
-    // Check for shared URL parameters
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const encoded = params.get('s');
@@ -73,9 +43,7 @@ export default function CalculatorPage() {
         }
       }
     }
-
-    return () => subscription.unsubscribe();
-  }, [setUser, setInputs]);
+  }, [setInputs]);
 
   return (
     <main className="min-h-screen bg-[#050505]">
@@ -155,6 +123,7 @@ export default function CalculatorPage() {
       <LandingFooter />
       <AuthModal />
       <PremiumModal />
+      <EmailBanner />
     </main>
   );
 }

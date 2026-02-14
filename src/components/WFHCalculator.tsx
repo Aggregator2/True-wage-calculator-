@@ -440,7 +440,7 @@ export default function WFHCalculator() {
                 ].filter(item => item.value > 0).map(item => (
                   <div key={item.label} className="flex items-center justify-between">
                     <span className="text-sm text-neutral-400">{item.label}</span>
-                    <span className={`text-sm font-medium text-${item.color}-400`}>
+                    <span className={`text-sm font-medium ${item.color === 'indigo' ? 'text-indigo-400' : 'text-orange-400'}`}>
                       {formatCurrency(Math.round(item.value))}/yr
                     </span>
                   </div>

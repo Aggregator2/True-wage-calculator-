@@ -99,9 +99,6 @@ export async function generateDonutChart(
 
   const chart = new Chart(ctx, config);
 
-  // Wait for chart to render
-  await new Promise(resolve => setTimeout(resolve, 100));
-
   const base64Image = canvas.toDataURL('image/png');
   chart.destroy();
 
@@ -171,8 +168,6 @@ export async function generateBarChart(
   };
 
   const chart = new Chart(ctx, config);
-
-  await new Promise(resolve => setTimeout(resolve, 100));
 
   const base64Image = canvas.toDataURL('image/png');
   chart.destroy();
@@ -253,8 +248,6 @@ export async function generateLineChart(
 
   const chart = new Chart(ctx, config);
 
-  await new Promise(resolve => setTimeout(resolve, 100));
-
   const base64Image = canvas.toDataURL('image/png');
   chart.destroy();
 
@@ -333,8 +326,6 @@ export async function generateTimeCostChart(
 
   const chart = new Chart(ctx, config);
 
-  await new Promise(resolve => setTimeout(resolve, 100));
-
   const base64Image = canvas.toDataURL('image/png');
   chart.destroy();
 
@@ -406,8 +397,6 @@ export async function generateComparisonChart(
   };
 
   const chart = new Chart(ctx, config);
-
-  await new Promise(resolve => setTimeout(resolve, 100));
 
   const base64Image = canvas.toDataURL('image/png');
   chart.destroy();

@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { calculateAllDeductions, calculateTrueHours } from '@/lib/calculator';
+import { formatSalary, parseSalary } from '@/lib/utils';
 import CountUpNumber from '@/components/ui/CountUpNumber';
 import AnimatedEntry from '@/components/ui/AnimatedEntry';
 
@@ -25,9 +26,6 @@ export default function MiniCalculator() {
   };
 
   const results = calculated ? getResults() : null;
-
-  const formatSalary = (val: number) => val.toLocaleString('en-GB');
-  const parseSalary = (val: string) => parseInt(val.replace(/,/g, ''), 10) || 0;
 
   return (
     <section className="py-20 px-6">

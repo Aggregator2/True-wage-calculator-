@@ -289,7 +289,7 @@ export default function IncomeSection({
                 <p className="text-4xl font-bold text-white tabular-nums">
                   <CountUpNumber
                     end={statedHourlyWage}
-                    prefix="\u00A3"
+                    prefix={'£'}
                     decimals={2}
                     className="text-4xl font-bold text-white"
                   />
@@ -303,7 +303,7 @@ export default function IncomeSection({
                 <span className="text-xs text-[#DC2626] font-semibold tabular-nums">
                   -<CountUpNumber
                     end={wageDelta}
-                    prefix="\u00A3"
+                    prefix={'£'}
                     decimals={2}
                     className="text-xs text-[#DC2626] font-semibold"
                   />
@@ -318,7 +318,7 @@ export default function IncomeSection({
                 <p className="text-4xl font-bold text-[#DC2626] tabular-nums">
                   <CountUpNumber
                     end={trueHourlyWage}
-                    prefix="\u00A3"
+                    prefix={'£'}
                     decimals={2}
                     className="text-4xl font-bold text-[#DC2626]"
                   />

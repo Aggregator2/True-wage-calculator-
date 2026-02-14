@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
 
 let _stripe: Stripe | null = null;
 function getStripe(): Stripe {
@@ -9,16 +10,37 @@ function getStripe(): Stripe {
   return _stripe;
 }
 
+async function verifyUser(token: string) {
+  const supabaseAuth = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+    {
+      global: {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    }
+  );
+  const { data: { user }, error } = await supabaseAuth.auth.getUser();
+  return { user, error };
+}
+
 export async function POST(request: Request) {
   try {
-    const { lookupKey, userId, userEmail } = await request.json();
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Must be logged in' },
-        { status: 401 }
-      );
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const token = authHeader.slice(7);
+    const { user, error: authError } = await verifyUser(token);
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userId = user.id;
+    const userEmail = user.email;
+
+    const { lookupKey } = await request.json();
 
     if (!lookupKey) {
       return NextResponse.json(
